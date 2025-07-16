@@ -54,7 +54,7 @@ internal static partial class FunctionCallsProcessorLoggingExtensions
         if (logger.IsEnabled(LogLevel.Debug))
         {
             var functionsLog = (configuration.Functions != null && configuration.Functions.Any())
-                ? string.Join(", ", configuration.Functions.Select(f => FunctionName.ToFullyQualifiedName(f.Name, f.PluginName)))
+                ? string.Join(", ", configuration.Functions.Select(f => string.IsNullOrEmpty(f.PluginName) ? f.Name : $"{f.PluginName}-{f.Name}"))
                 : "None (Function calling is disabled)";
 
             s_logFunctionChoiceBehaviorConfiguration(
@@ -77,7 +77,7 @@ internal static partial class FunctionCallsProcessorLoggingExtensions
         {
             s_logFunctionCalls(
                 logger,
-                string.Join(", ", functionCalls.Select(call => $"{FunctionName.ToFullyQualifiedName(call.FunctionName, call.PluginName)} [Id: {call.Id}]")),
+                string.Join(", ", functionCalls.Select(call => $"{GetFullyQualifiedName(call.FunctionName, call.PluginName)} [Id: {call.Id}]")),
                 null
             );
         }
@@ -90,7 +90,7 @@ internal static partial class FunctionCallsProcessorLoggingExtensions
     {
         if (logger.IsEnabled(LogLevel.Debug))
         {
-            var fqn = FunctionName.ToFullyQualifiedName(context.Function.Name, context.Function.PluginName);
+            var fqn = GetFullyQualifiedName(context.Function.Name, context.Function.PluginName);
 
             s_logAutoFunctionInvocationFilterContext(
                     logger,
@@ -111,7 +111,7 @@ internal static partial class FunctionCallsProcessorLoggingExtensions
     {
         if (logger.IsEnabled(LogLevel.Debug))
         {
-            var fqn = FunctionName.ToFullyQualifiedName(context.Function.Name, context.Function.PluginName);
+            var fqn = GetFullyQualifiedName(context.Function.Name, context.Function.PluginName);
 
             s_logAutoFunctionInvocationFilterTermination(logger, fqn, context.ToolCallId, null);
         }
@@ -124,7 +124,7 @@ internal static partial class FunctionCallsProcessorLoggingExtensions
     {
         if (logger.IsEnabled(LogLevel.Debug))
         {
-            var fqn = FunctionName.ToFullyQualifiedName(functionCall.FunctionName, functionCall.PluginName);
+            var fqn = GetFullyQualifiedName(functionCall.FunctionName, functionCall.PluginName);
 
             logger.LogDebug("Function call request failed: Name:{Name}, Id:{Id}", fqn, functionCall.Id);
         }
@@ -132,10 +132,18 @@ internal static partial class FunctionCallsProcessorLoggingExtensions
         // Log error at trace level only because it may contain sensitive information.
         if (logger.IsEnabled(LogLevel.Trace))
         {
-            var fqn = FunctionName.ToFullyQualifiedName(functionCall.FunctionName, functionCall.PluginName);
+            var fqn = GetFullyQualifiedName(functionCall.FunctionName, functionCall.PluginName);
 
             logger.LogTrace("Function call request failed: Name:{Name}, Id:{Id}, Error:{Error}", fqn, functionCall.Id, error);
         }
+    }
+
+    /// <summary>
+    /// Gets the fully qualified name for a function.
+    /// </summary>
+    private static string GetFullyQualifiedName(string functionName, string? pluginName)
+    {
+        return string.IsNullOrEmpty(pluginName) ? functionName : $"{pluginName}-{functionName}";
     }
 
     [LoggerMessage(EventId = 0, Level = LogLevel.Debug, Message = "The maximum limit of {MaxNumberOfAutoInvocations} auto invocations per user request has been reached. Auto invocation is now disabled.")]

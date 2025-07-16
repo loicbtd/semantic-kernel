@@ -56,6 +56,16 @@ public sealed class OnnxFunction
     public KernelReturnParameterMetadata? ReturnParameter { get; }
 
     /// <summary>
+    /// Gets the name of the function (for compatibility with KernelFunction).
+    /// </summary>
+    public string Name => this.FunctionName;
+
+    /// <summary>
+    /// Gets the plugin name (for compatibility; ONNX functions do not have plugins).
+    /// </summary>
+    public string? PluginName => null;
+
+    /// <summary>
     /// Gets the JSON schema representation of the function.
     /// </summary>
     public JsonObject ToFunctionDefinition()
@@ -169,7 +179,7 @@ public sealed class OnnxFunction
             }
         }
 
-        return new FunctionCallContent(functionName, arguments);
+        return new FunctionCallContent(functionName, arguments: arguments);
     }
 
     /// <summary>

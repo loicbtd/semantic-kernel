@@ -2,16 +2,27 @@
 
   <PropertyGroup>
     <!-- THIS PROPERTY GROUP MUST COME FIRST -->
-    <AssemblyName>Microsoft.SemanticKernel.Connectors.Onnx</AssemblyName>
+    <AssemblyName>Camag.SemanticKernel.Connectors.Onnx</AssemblyName>
     <RootNamespace>$(AssemblyName)</RootNamespace>
     <TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
     <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net7.0'))">true</IsAotCompatible>
-    <VersionSuffix>alpha</VersionSuffix>
     <NoWarn>$(NoWarn);SKEXP0001;SYSLIB1222</NoWarn>
   </PropertyGroup>
 
   <!-- IMPORT NUGET PACKAGE SHARED PROPERTIES -->
   <Import Project="$(RepoRoot)/dotnet/nuget/nuget-package.props" />
+
+  <!-- OVERRIDE MICROSOFT-SPECIFIC PROPERTIES -->
+  <PropertyGroup>
+    <Authors>Camag</Authors>
+    <Company>Camag</Company>
+    <Product>Semantic Kernel ONNX Connector</Product>
+    <Description>Semantic Kernel connectors for the ONNX runtime. Contains clients for text embedding generation and chat completion.</Description>
+    <PackageTags>AI, Artificial Intelligence, SDK, ONNX, Semantic Kernel</PackageTags>
+    <PackageId>$(AssemblyName)</PackageId>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Copyright>© Camag. All rights reserved.</Copyright>
+  </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="$(RepoRoot)/dotnet/src/InternalUtilities/src/Diagnostics/Verify.cs" Link="%(RecursiveDir)%(Filename)%(Extension)" />
@@ -26,23 +37,39 @@
     <Compile Include="$(RepoRoot)/dotnet/src/InternalUtilities/src/Text/OptionalBoolJsonConverter.cs" Link="%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="$(RepoRoot)/dotnet/src/InternalUtilities/src/Text/ExceptionJsonConverter.cs" Link="%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="$(RepoRoot)/dotnet/src/InternalUtilities/src/System/AppContextSwitchHelper.cs" Link="%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="$(RepoRoot)/dotnet/src/InternalUtilities/connectors/AI/FunctionCalling/*.cs" Link="%(RecursiveDir)%(Filename)%(Extension)"/>
   </ItemGroup>
 
   <PropertyGroup>
     <Title>Semantic Kernel - ONNX Connectors</Title>
-    <Description>Semantic Kernel connectors for the ONNX runtime. Contains clients for text embedding generation.</Description>
+    <Description>Semantic Kernel connectors for the ONNX runtime. Contains clients for text embedding generation and chat completion.</Description>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\SemanticKernel.Core\SemanticKernel.Core.csproj" />
+    <PackageReference Include="Microsoft.SemanticKernel.Abstractions" />
+    <PackageReference Include="Microsoft.SemanticKernel.Core" />
+    <PackageReference Include="Microsoft.Extensions.AI" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="FastBertTokenizer" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime" />
+  </ItemGroup>
+
+  <!-- Temporarily disable SourceLink for build -->
+  <PropertyGroup>
+    <IncludeSymbols>false</IncludeSymbols>
+    <PublishRepositoryUrl>false</PublishRepositoryUrl>
+  </PropertyGroup>
+
+  <!-- Override SourceLink inclusion -->
+  <ItemGroup>
+    <PackageReference Remove="Microsoft.SourceLink.GitHub" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI" Condition=" '$(Configuration)' == 'Debug' OR '$(Configuration)' == 'Release' " />
     <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" Condition=" '$(Configuration)' == 'Debug_Cuda' OR '$(Configuration)' == 'Release_Cuda' " />
-    <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.DirectML" Condition=" '$(Configuration)' == 'Debug_DirectML' OR '$(Configuration)' == 'Release_DirectML' " />    
+    <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.DirectML" Condition=" '$(Configuration)' == 'Debug_DirectML' OR '$(Configuration)' == 'Release_DirectML' " />
   </ItemGroup>
 
 </Project>

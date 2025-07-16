@@ -88,6 +88,26 @@ The ONNX connector implements function calling by:
 3. **Response Parsing**: The model's response is parsed for function call requests
 4. **Function Execution**: Functions are executed and results are fed back to the model
 
+### Enhanced Parsing
+
+The connector now supports multiple parsing strategies:
+
+- **JSON Code Blocks**: Extracts function calls from ```json ... ``` blocks
+- **Inline Code**: Extracts function calls from `{...}` inline code blocks
+- **Raw JSON**: Parses function calls from direct JSON responses
+- **Regex Fallback**: Uses regex patterns for non-standard formats
+
+### Auto-Invoke Fallback
+
+When the standard function calling pipeline fails (common with some ONNX models like Phi-4), the connector automatically falls back to manual function invocation:
+
+1. **Detection**: Identifies function calls in the model's response
+2. **Validation**: Verifies the function exists and is allowed
+3. **Execution**: Manually invokes the function through the kernel
+4. **Result**: Returns the function result instead of the JSON call
+
+This ensures compatibility with models that generate function calls but don't work well with the standard auto-invoke pipeline.
+
 ### Function Call Format
 
 The model is instructed to make function calls in the following JSON format:
@@ -150,10 +170,27 @@ For function calling to work effectively, the ONNX model should:
 - Be able to generate structured JSON output
 - Have been fine-tuned or trained to understand function calling patterns
 
-Popular models that work well include:
-- Phi-3 Mini
+### Model Compatibility
+
+**Models with Full Auto-Invoke Support:**
 - Llama 2/3 Chat variants
-- Other instruction-tuned models
+- Mistral variants
+- Some Phi-3 variants
+
+**Models with Fallback Support (Manual Invocation):**
+- Phi-4 Multimodal Instruct ONNX
+- Other models that generate function calls but don't work with standard auto-invoke
+
+The connector automatically detects which approach works best for each model and uses the appropriate method.
+
+### Troubleshooting
+
+If function calling isn't working:
+
+1. **Check Logs**: Enable debug logging to see parsing attempts
+2. **Verify Model**: Ensure the model supports instruction following
+3. **Test Parsing**: Try different function call formats
+4. **Fallback**: The manual fallback should work even if auto-invoke fails
 
 ## Configuration
 

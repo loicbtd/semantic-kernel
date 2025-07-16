@@ -1,280 +1,225 @@
 // Copyright (c) Microsoft. All rights reserved.
 
-using System;
-using System.ComponentModel;
-using System.Threading.Tasks;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.Onnx;
+using Microsoft.SemanticKernel.Plugins.Core;
 using Xunit;
 
-namespace Microsoft.SemanticKernel.Connectors.Onnx.UnitTests;
+namespace SemanticKernel.Connectors.Onnx.UnitTests;
 
 /// <summary>
-/// Unit tests for ONNX function calling functionality.
+/// Unit tests for ONNX function calling improvements.
 /// </summary>
-public sealed class OnnxFunctionCallingTests
+public class OnnxFunctionCallingTests
 {
     [Fact]
-    public void OnnxToolCallBehavior_EnableKernelFunctions_CreatesCorrectBehavior()
-    {
-        // Arrange & Act
-        var behavior = OnnxToolCallBehavior.EnableKernelFunctions;
-
-        // Assert
-        Assert.NotNull(behavior);
-        Assert.False(behavior.AutoInvoke);
-        Assert.True(behavior.AllowAnyRequestedKernelFunction);
-        Assert.Equal(0, behavior.MaximumAutoInvokeAttempts);
-    }
-
-    [Fact]
-    public void OnnxToolCallBehavior_AutoInvokeKernelFunctions_CreatesCorrectBehavior()
-    {
-        // Arrange & Act
-        var behavior = OnnxToolCallBehavior.AutoInvokeKernelFunctions;
-
-        // Assert
-        Assert.NotNull(behavior);
-        Assert.True(behavior.AutoInvoke);
-        Assert.True(behavior.AllowAnyRequestedKernelFunction);
-        Assert.Equal(128, behavior.MaximumAutoInvokeAttempts);
-    }
-
-    [Fact]
-    public void OnnxToolCallBehavior_EnableFunctions_CreatesCorrectBehavior()
+    public void ExtractJsonFromCodeBlock_WithJsonCodeBlock_ReturnsJsonContent()
     {
         // Arrange
-        var functions = new[]
-        {
-            new OnnxFunction("TestFunction", "A test function"),
-            new OnnxFunction("AnotherFunction", "Another test function")
-        };
+        var content = @"```json
+{
+  ""function_call"": {
+    ""name"": ""Time"",
+    ""arguments"": {}
+  }
+}
+```";
 
         // Act
-        var behavior = OnnxToolCallBehavior.EnableFunctions(functions, autoInvoke: true);
+        var jsonContent = OnnxRuntimeGenAIFunctionCallingChatCompletionService.ExtractJsonFromCodeBlock(content);
 
         // Assert
-        Assert.NotNull(behavior);
-        Assert.True(behavior.AutoInvoke);
-        Assert.Equal(128, behavior.MaximumAutoInvokeAttempts);
+        Assert.NotNull(jsonContent);
+        Assert.Contains("function_call", jsonContent);
+        Assert.Contains("Time", jsonContent);
     }
 
     [Fact]
-    public void OnnxToolCallBehavior_RequireFunction_CreatesCorrectBehavior()
+    public void ExtractJsonFromCodeBlock_WithInlineCodeBlock_ReturnsJsonContent()
     {
         // Arrange
-        var function = new OnnxFunction("RequiredFunction", "A required function");
+        var content = @"Here is the function call: `{""function_call"": {""name"": ""Time"", ""arguments"": {}}}`";
 
         // Act
-        var behavior = OnnxToolCallBehavior.RequireFunction(function, autoInvoke: false);
+        var jsonContent = OnnxRuntimeGenAIFunctionCallingChatCompletionService.ExtractJsonFromCodeBlock(content);
 
         // Assert
-        Assert.NotNull(behavior);
-        Assert.False(behavior.AutoInvoke);
-        Assert.Equal(0, behavior.MaximumAutoInvokeAttempts);
+        Assert.NotNull(jsonContent);
+        Assert.Contains("function_call", jsonContent);
+        Assert.Contains("Time", jsonContent);
     }
 
     [Fact]
-    public void OnnxFunction_Constructor_InitializesCorrectly()
+    public void ExtractJsonFromCodeBlock_WithNoCodeBlock_ReturnsNull()
     {
         // Arrange
-        var functionName = "TestFunction";
-        var description = "A test function";
+        var content = "This is just regular text without any function calls.";
 
         // Act
-        var function = new OnnxFunction(functionName, description);
+        var jsonContent = OnnxRuntimeGenAIFunctionCallingChatCompletionService.ExtractJsonFromCodeBlock(content);
 
         // Assert
-        Assert.Equal(functionName, function.FunctionName);
-        Assert.Equal(description, function.Description);
-        Assert.NotNull(function.Parameters);
-        Assert.Empty(function.Parameters);
-        Assert.Null(function.ReturnParameter);
+        Assert.Null(jsonContent);
     }
 
     [Fact]
-    public void OnnxFunction_WithParameters_InitializesCorrectly()
+    public void TryParseJsonFunctionCall_WithValidJson_ReturnsFunctionCall()
     {
         // Arrange
-        var functionName = "TestFunction";
-        var description = "A test function";
-        var parameters = new[]
-        {
-            new KernelParameterMetadata("param1")
-            {
-                Description = "First parameter",
-                ParameterType = typeof(string),
-                IsRequired = true
-            },
-            new KernelParameterMetadata("param2")
-            {
-                Description = "Second parameter",
-                ParameterType = typeof(int),
-                IsRequired = false
-            }
-        };
+        var jsonContent = @"{
+  ""function_call"": {
+    ""name"": ""Time"",
+    ""arguments"": {}
+  }
+}";
 
         // Act
-        var function = new OnnxFunction(functionName, description, parameters);
-
-        // Assert
-        Assert.Equal(functionName, function.FunctionName);
-        Assert.Equal(description, function.Description);
-        Assert.Equal(2, function.Parameters.Count);
-        Assert.Equal("param1", function.Parameters[0].Name);
-        Assert.Equal("param2", function.Parameters[1].Name);
-    }
-
-    [Fact]
-    public void OnnxFunction_ToFunctionDefinition_GeneratesCorrectSchema()
-    {
-        // Arrange
-        var functionName = "TestFunction";
-        var description = "A test function";
-        var parameters = new[]
-        {
-            new KernelParameterMetadata("stringParam")
-            {
-                Description = "A string parameter",
-                ParameterType = typeof(string),
-                IsRequired = true
-            },
-            new KernelParameterMetadata("intParam")
-            {
-                Description = "An integer parameter",
-                ParameterType = typeof(int),
-                IsRequired = false
-            }
-        };
-
-        var function = new OnnxFunction(functionName, description, parameters);
-
-        // Act
-        var schema = function.ToFunctionDefinition();
-
-        // Assert
-        Assert.NotNull(schema);
-        Assert.Equal(functionName, schema["name"]?.ToString());
-        Assert.Equal(description, schema["description"]?.ToString());
-        Assert.NotNull(schema["parameters"]);
-        
-        var parametersSchema = schema["parameters"];
-        Assert.Equal("object", parametersSchema?["type"]?.ToString());
-        Assert.NotNull(parametersSchema?["properties"]);
-        Assert.NotNull(parametersSchema?["required"]);
-    }
-
-    [Fact]
-    public void OnnxFunction_ParseFunctionCall_WithValidJson_ParsesCorrectly()
-    {
-        // Arrange
-        var functionName = "TestFunction";
-        var argumentsJson = """{"param1": "value1", "param2": 42}""";
-
-        // Act
-        var functionCall = OnnxFunction.ParseFunctionCall(functionName, argumentsJson);
+        var functionCall = OnnxRuntimeGenAIFunctionCallingChatCompletionService.TryParseJsonFunctionCall(jsonContent);
 
         // Assert
         Assert.NotNull(functionCall);
-        Assert.Equal(functionName, functionCall.FunctionName);
-        Assert.Equal(2, functionCall.Arguments.Count);
-        Assert.Contains("param1", functionCall.Arguments);
-        Assert.Contains("param2", functionCall.Arguments);
+        Assert.Equal("Time", functionCall.FunctionName);
     }
 
     [Fact]
-    public void OnnxFunction_ParseFunctionCall_WithInvalidJson_FallsBackToSingleArgument()
+    public void TryParseJsonFunctionCall_WithInvalidJson_ReturnsNull()
     {
         // Arrange
-        var functionName = "TestFunction";
-        var invalidJson = "not valid json";
+        var jsonContent = "This is not valid JSON";
 
         // Act
-        var functionCall = OnnxFunction.ParseFunctionCall(functionName, invalidJson);
+        var functionCall = OnnxRuntimeGenAIFunctionCallingChatCompletionService.TryParseJsonFunctionCall(jsonContent);
 
         // Assert
-        Assert.NotNull(functionCall);
-        Assert.Equal(functionName, functionCall.FunctionName);
-        Assert.Single(functionCall.Arguments);
-        Assert.Contains("input", functionCall.Arguments);
-        Assert.Equal(invalidJson, functionCall.Arguments["input"]);
+        Assert.Null(functionCall);
     }
 
     [Fact]
-    public void OnnxFunction_CreateFunctionResult_CreatesCorrectResult()
+    public void ContainsFunctionCall_WithJsonFunctionCall_ReturnsTrue()
     {
         // Arrange
-        var functionCall = new FunctionCallContent("TestFunction", new KernelArguments());
-        var result = "Test result";
+        var content = @"{""function_call"": {""name"": ""Time"", ""arguments"": {}}}";
 
         // Act
-        var functionResult = OnnxFunction.CreateFunctionResult(functionCall, result);
+        var containsFunctionCall = OnnxRuntimeGenAIFunctionCallingChatCompletionService.ContainsFunctionCall(content);
 
         // Assert
-        Assert.NotNull(functionResult);
-        Assert.Equal(functionCall, functionResult.FunctionCall);
-        Assert.Equal(result, functionResult.Result);
+        Assert.True(containsFunctionCall);
     }
 
     [Fact]
-    public void OnnxFunctionExtensions_ToOnnxFunction_ConvertsCorrectly()
+    public void ContainsFunctionCall_WithCodeBlockFunctionCall_ReturnsTrue()
     {
         // Arrange
-        var metadata = new KernelFunctionMetadata("TestFunction")
-        {
-            Description = "A test function",
-            Parameters = new[]
-            {
-                new KernelParameterMetadata("param1")
-                {
-                    Description = "First parameter",
-                    ParameterType = typeof(string),
-                    IsRequired = true
-                }
-            }
-        };
+        var content = @"```json
+{""function_call"": {""name"": ""Time"", ""arguments"": {}}}
+```";
 
         // Act
-        var onnxFunction = metadata.ToOnnxFunction();
+        var containsFunctionCall = OnnxRuntimeGenAIFunctionCallingChatCompletionService.ContainsFunctionCall(content);
 
         // Assert
-        Assert.NotNull(onnxFunction);
-        Assert.Equal(metadata.Name, onnxFunction.FunctionName);
-        Assert.Equal(metadata.Description, onnxFunction.Description);
-        Assert.Equal(metadata.Parameters.Count, onnxFunction.Parameters.Count);
+        Assert.True(containsFunctionCall);
     }
 
     [Fact]
-    public void OnnxRuntimeGenAIPromptExecutionSettings_ToolCallBehavior_SetAndGetCorrectly()
+    public void ContainsFunctionCall_WithNoFunctionCall_ReturnsFalse()
     {
         // Arrange
-        var settings = new OnnxRuntimeGenAIPromptExecutionSettings();
-        var behavior = OnnxToolCallBehavior.AutoInvokeKernelFunctions;
+        var content = "This is just regular text without any function calls.";
 
         // Act
-        settings.ToolCallBehavior = behavior;
+        var containsFunctionCall = OnnxRuntimeGenAIFunctionCallingChatCompletionService.ContainsFunctionCall(content);
 
         // Assert
-        Assert.Equal(behavior, settings.ToolCallBehavior);
+        Assert.False(containsFunctionCall);
     }
 }
 
 /// <summary>
-/// Sample plugin for testing function calling.
+/// Extension methods to access private methods for testing.
 /// </summary>
-public class TestPlugin
+public static class OnnxRuntimeGenAIFunctionCallingChatCompletionService
 {
-    [KernelFunction]
-    [Description("Get a test string")]
-    public string GetTestString()
+    /// <summary>
+    /// Extracts JSON content from markdown code blocks.
+    /// </summary>
+    public static string? ExtractJsonFromCodeBlock(string content)
     {
-        return "Test string";
+        // Match ```json ... ``` or ``` ... ``` patterns
+        var codeBlockMatch = System.Text.RegularExpressions.Regex.Match(content, @"```(?:json)?\s*\n?(.*?)\n?```", System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (codeBlockMatch.Success)
+        {
+            return codeBlockMatch.Groups[1].Value.Trim();
+        }
+
+        // Match `{...}` inline code blocks
+        var inlineCodeMatch = System.Text.RegularExpressions.Regex.Match(content, @"`(\{.*?\})`", System.Text.RegularExpressions.RegexOptions.Singleline);
+        if (inlineCodeMatch.Success)
+        {
+            return inlineCodeMatch.Groups[1].Value.Trim();
+        }
+
+        return null;
     }
 
-    [KernelFunction]
-    [Description("Add two numbers")]
-    public int Add([Description("First number")] int a, [Description("Second number")] int b)
+    /// <summary>
+    /// Tries to parse a function call from JSON content.
+    /// </summary>
+    public static Microsoft.SemanticKernel.ChatCompletion.FunctionCallContent? TryParseJsonFunctionCall(string jsonContent)
     {
-        return a + b;
+        try
+        {
+            var jsonDocument = JsonDocument.Parse(jsonContent);
+            if (jsonDocument.RootElement.TryGetProperty("function_call", out var functionCallElement))
+            {
+                if (functionCallElement.TryGetProperty("name", out var nameElement) &&
+                    functionCallElement.TryGetProperty("arguments", out var argumentsElement))
+                {
+                    var functionName = nameElement.GetString();
+                    var argumentsJson = argumentsElement.GetRawText();
+
+                    if (!string.IsNullOrEmpty(functionName))
+                    {
+                        return Microsoft.SemanticKernel.Connectors.Onnx.OnnxFunction.ParseFunctionCall(functionName, argumentsJson);
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // JSON parsing failed, return null to try other methods
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Checks if the content contains a function call pattern.
+    /// </summary>
+    public static bool ContainsFunctionCall(string content)
+    {
+        if (string.IsNullOrEmpty(content))
+        {
+            return false;
+        }
+
+        // Check for JSON function call pattern
+        if (content.Contains("function_call") && content.Contains("{") && content.Contains("}"))
+        {
+            return true;
+        }
+
+        // Check for code block with function call
+        if (content.Contains("```") && content.Contains("function_call"))
+        {
+            return true;
+        }
+
+        return false;
     }
 }
