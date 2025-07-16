@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft. All rights reserved.
+// Copyright (c) Microsoft. All rights reserved.
 
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
@@ -149,4 +149,36 @@ public sealed class OnnxRuntimeGenAIPromptExecutionSettings : PromptExecutionSet
     [JsonPropertyName("do_sample")]
     [JsonConverter(typeof(OptionalBoolJsonConverter))]
     public bool? DoSample { get; set; }
+
+    /// <summary>
+    /// The tool call behavior to use for the ONNX model.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The ONNX model can have its behavior configured to use tools. This can be:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>To disable all tool calling, set the property to null (the default).</item>
+    /// <item>
+    /// To allow the model to request one of any number of functions, set the property to an
+    /// instance returned from <see cref="OnnxToolCallBehavior.EnableFunctions"/>, called with
+    /// a list of the functions available.
+    /// </item>
+    /// <item>
+    /// To allow the model to request one of any of the functions in the supplied <see cref="Kernel"/>,
+    /// set the property to <see cref="OnnxToolCallBehavior.EnableKernelFunctions"/> if the client should simply
+    /// send the information about the functions and not handle the response in any special manner, or
+    /// <see cref="OnnxToolCallBehavior.AutoInvokeKernelFunctions"/> if the client should attempt to automatically
+    /// invoke the function and send the result back to the service.
+    /// </item>
+    /// </list>
+    /// For all options where an instance is provided, auto-invoke behavior may be selected. If the service
+    /// sends a request for a function call, if auto-invoke has been requested, the client will attempt to
+    /// resolve that function from the functions available in the <see cref="Kernel"/>, and if found, rather
+    /// than returning the response back to the caller, it will handle the request automatically, invoking
+    /// the function, and sending back the result. The intermediate messages will be retained in the
+    /// <see cref="ChatHistory"/> if an instance was provided.
+    /// </remarks>
+    [JsonIgnore]
+    public OnnxToolCallBehavior? ToolCallBehavior { get; set; }
 }

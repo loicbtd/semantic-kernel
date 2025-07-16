@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft. All rights reserved.
+// Copyright (c) Microsoft. All rights reserved.
 
 using System;
 using System.IO;
@@ -35,6 +35,36 @@ public static class OnnxKernelBuilderExtensions
     {
         builder.Services.AddKeyedSingleton<IChatCompletionService>(serviceId, (serviceProvider, _) =>
             new OnnxRuntimeGenAIChatCompletionService(
+                modelId,
+                modelPath: modelPath,
+                loggerFactory: serviceProvider.GetService<ILoggerFactory>(),
+                jsonSerializerOptions));
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds the ONNX GenAI chat completion service with function calling support to the <see cref="IKernelBuilder"/>.
+    /// </summary>
+    /// <param name="builder">The <see cref="IKernelBuilder"/> instance to augment.</param>
+    /// <param name="modelId">The name of the model.</param>
+    /// <param name="modelPath">The generative AI ONNX model path for the chat completion service.</param>
+    /// <param name="serviceId">A local identifier for the given AI service.</param>
+    /// <param name="jsonSerializerOptions">The <see cref="JsonSerializerOptions"/> to use for various aspects of serialization, such as function argument deserialization, function result serialization, logging, etc., of the service.</param>
+    /// <returns>The same instance as <paramref name="builder"/>.</returns>
+    public static IKernelBuilder AddOnnxRuntimeGenAIFunctionCallingChatCompletion(
+        this IKernelBuilder builder,
+        string modelId,
+        string modelPath,
+        string? serviceId = null,
+        JsonSerializerOptions? jsonSerializerOptions = null)
+    {
+        Verify.NotNull(builder);
+        Verify.NotNullOrWhiteSpace(modelId);
+        Verify.NotNullOrWhiteSpace(modelPath);
+
+        builder.Services.AddKeyedSingleton<IChatCompletionService>(serviceId, (serviceProvider, _) =>
+            new OnnxRuntimeGenAIFunctionCallingChatCompletionService(
                 modelId,
                 modelPath: modelPath,
                 loggerFactory: serviceProvider.GetService<ILoggerFactory>(),
