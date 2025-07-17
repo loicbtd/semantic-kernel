@@ -19,17 +19,17 @@ public class Onnx_FunctionCalling(ITestOutputHelper output) : BaseTest(output)
     [Fact]
     public async Task FunctionCallingAutoInvokeAsync()
     {
-        string modelPath = "path/to/your/onnx/model";
+        string modelPath = "D:\\VisionCATS_AI_Agent\\Development\\.cache\\models\\microsoft_Phi_4_multimodal_instruct_onnx-gpu_gpu_int4_rtn_block_32";
         string modelId = "phi-3-mini-4k-instruct";
 
         // Create a kernel with the ONNX function calling chat completion service
         var builder = Kernel.CreateBuilder()
             .AddOnnxRuntimeGenAIFunctionCallingChatCompletion(modelId, modelPath);
-        
+
         // Add a simple plugin with a few functions
         builder.Plugins.AddFromType<TimePlugin>();
         builder.Plugins.AddFromType<MathPlugin>();
-        
+
         Kernel kernel = builder.Build();
 
         // Enable auto-invocation of functions
@@ -51,17 +51,17 @@ public class Onnx_FunctionCalling(ITestOutputHelper output) : BaseTest(output)
     [Fact]
     public async Task FunctionCallingManualInvokeAsync()
     {
-        string modelPath = "path/to/your/onnx/model";
+        string modelPath = "D:\\VisionCATS_AI_Agent\\Development\\.cache\\models\\microsoft_Phi_4_multimodal_instruct_onnx-gpu_gpu_int4_rtn_block_32";
         string modelId = "phi-3-mini-4k-instruct";
 
         // Create a kernel with the ONNX function calling chat completion service
         var builder = Kernel.CreateBuilder()
             .AddOnnxRuntimeGenAIFunctionCallingChatCompletion(modelId, modelPath);
-        
+
         // Add a simple plugin with a few functions
         builder.Plugins.AddFromType<TimePlugin>();
         builder.Plugins.AddFromType<MathPlugin>();
-        
+
         Kernel kernel = builder.Build();
 
         // Enable function calling without auto-invocation
@@ -83,16 +83,16 @@ public class Onnx_FunctionCalling(ITestOutputHelper output) : BaseTest(output)
     [Fact]
     public async Task FunctionCallingSpecificFunctionsAsync()
     {
-        string modelPath = "path/to/your/onnx/model";
+        string modelPath = "D:\\VisionCATS_AI_Agent\\Development\\.cache\\models\\microsoft_Phi_4_multimodal_instruct_onnx-gpu_gpu_int4_rtn_block_32";
         string modelId = "phi-3-mini-4k-instruct";
 
         // Create a kernel with the ONNX function calling chat completion service
         var builder = Kernel.CreateBuilder()
             .AddOnnxRuntimeGenAIFunctionCallingChatCompletion(modelId, modelPath);
-        
+
         // Add a simple plugin with a few functions
         builder.Plugins.AddFromType<MathPlugin>();
-        
+
         Kernel kernel = builder.Build();
 
         // Get specific functions

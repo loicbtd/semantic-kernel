@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -62,6 +63,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
                 this._config.AppendProvider(provider);
             }
         }
+
         this._model = new Model(this._config);
 
         this._logger = loggerFactory?.CreateLogger<OnnxRuntimeGenAIFunctionCallingChatCompletionService>() ??
@@ -311,7 +313,8 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         if (toolCallingConfig.Tools is not null && toolCallingConfig.Tools.Count > 0)
         {
             var functionsJson = CreateFunctionsJson(toolCallingConfig.Tools);
-            var systemMessage = $"You are a helpful assistant with access to the following functions:\n\n{functionsJson}\n\nIMPORTANT: When the user asks for information that requires a function, respond with ONLY JSON: {{\"function_call\": {{\"name\": \"function_name\", \"arguments\": {{}}}}}}\n\nWhen the user asks for natural language responses or general questions, respond with ONLY JSON: {{\"function_call\": {{}}, \"response_format\": \"your natural language response here\"}}\n\nYou can use {{result}} in response_format to include function results, or provide a complete sentence without placeholders.\n\nNEVER include explanatory text or code blocks. Respond with ONLY the JSON format.";
+            var systemMessage =
+                $"You are a helpful assistant with access to the following functions:\n\n{functionsJson}\n\nIMPORTANT: When the user asks for information that requires a function, respond with ONLY JSON: {{\"function_call\": {{\"name\": \"function_name\", \"arguments\": {{}}}}}}\n\nWhen the user asks for natural language responses or general questions, respond with ONLY JSON: {{\"function_call\": {{}}, \"response_format\": \"your natural language response here\"}}\n\nYou can use {{result}} in response_format to include function results, or provide a complete sentence without placeholders.\n\nNEVER include explanatory text or code blocks. Respond with ONLY the JSON format.";
 
             modifiedChatHistory.AddSystemMessage(systemMessage);
         }
@@ -337,7 +340,14 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
             functionsArray.Add(function.ToFunctionDefinition());
         }
 
-        return functionsArray.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        var options = new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver()
+        };
+        options.MakeReadOnly();
+
+        return functionsArray.ToJsonString(options);
     }
 
     /// <summary>
@@ -477,7 +487,6 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         CancellationToken cancellationToken)
     {
         this._logger.LogInformation("Manual fallback invoked for function: {FunctionName}", functionCall.FunctionName);
-
 
         try
         {
@@ -707,7 +716,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         return null;
     }
 
-        /// <summary>
+    /// <summary>
     /// Tries to parse a function call with response format from JSON content.
     /// </summary>
     private static (FunctionCallContent? FunctionCall, string? ResponseFormat)? TryParseJsonFunctionCallWithResponse(string jsonContent)
@@ -736,7 +745,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
                 }
 
                 // Check if this is a natural language response (empty function_call)
-                if (functionCallElement.ValueKind == JsonValueKind.Object && 
+                if (functionCallElement.ValueKind == JsonValueKind.Object &&
                     functionCallElement.EnumerateObject().Count() == 0)
                 {
                     // Empty function_call means natural language response
