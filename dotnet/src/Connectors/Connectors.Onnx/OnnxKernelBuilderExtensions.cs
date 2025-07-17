@@ -1,6 +1,7 @@
-// Copyright (c) Microsoft. All rights reserved.
+﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
@@ -51,13 +52,15 @@ public static class OnnxKernelBuilderExtensions
     /// <param name="modelPath">The generative AI ONNX model path for the chat completion service.</param>
     /// <param name="serviceId">A local identifier for the given AI service.</param>
     /// <param name="jsonSerializerOptions">The <see cref="JsonSerializerOptions"/> to use for various aspects of serialization, such as function argument deserialization, function result serialization, logging, etc., of the service.</param>
+    /// <param name="providers">The providers to use for the chat completion service.</param>
     /// <returns>The same instance as <paramref name="builder"/>.</returns>
     public static IKernelBuilder AddOnnxRuntimeGenAIFunctionCallingChatCompletion(
         this IKernelBuilder builder,
         string modelId,
         string modelPath,
         string? serviceId = null,
-        JsonSerializerOptions? jsonSerializerOptions = null)
+        JsonSerializerOptions? jsonSerializerOptions = null,
+        List<string>? providers = null)
     {
         Verify.NotNull(builder);
         Verify.NotNullOrWhiteSpace(modelId);
@@ -68,7 +71,8 @@ public static class OnnxKernelBuilderExtensions
                 modelId,
                 modelPath: modelPath,
                 loggerFactory: serviceProvider.GetService<ILoggerFactory>(),
-                jsonSerializerOptions));
+                jsonSerializerOptions,
+                providers));
 
         return builder;
     }
