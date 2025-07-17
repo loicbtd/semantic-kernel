@@ -160,8 +160,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         if (toolCallingConfig is null || toolCallingConfig.Tools is null || toolCallingConfig.Tools.Count == 0)
         {
             this._logger.LogInformation("No function calling configured, using base service");
-            return await this.GetChatCompletionService().GetChatMessageContentsAsync(chatHistory, executionSettings, kernel, cancellationToken)
-                .ConfigureAwait(false);
+            return await this.GetChatCompletionService().GetChatMessageContentsAsync(chatHistory, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
         }
 
         this._logger.LogInformation("Function calling is configured, processing with function calling");
@@ -170,8 +169,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         var modifiedChatHistory = await this.CreateModifiedChatHistoryAsync(chatHistory, toolCallingConfig, cancellationToken).ConfigureAwait(false);
 
         // Get the response from the underlying service
-        var results = await this.GetChatCompletionService()
-            .GetChatMessageContentsAsync(modifiedChatHistory, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
+        var results = await this.GetChatCompletionService().GetChatMessageContentsAsync(modifiedChatHistory, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
 
         this._logger.LogInformation("Got {Count} results from base service", results.Count);
         foreach (var result in results)
@@ -180,9 +178,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         }
 
         // Process the results for function calls
-        var processedResults = await this
-            .ProcessChatMessageContentsAsync(results, toolCallingConfig, chatHistory, 0, executionSettings, kernel, cancellationToken)
-            .ConfigureAwait(false);
+        var processedResults = await this.ProcessChatMessageContentsAsync(results, toolCallingConfig, chatHistory, 0, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
 
         this._logger.LogInformation("Processed {Count} results", processedResults.Count);
         foreach (var result in processedResults)
@@ -207,8 +203,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         // If no function calling is configured, use the base service
         if (toolCallingConfig is null || toolCallingConfig.Tools is null || toolCallingConfig.Tools.Count == 0)
         {
-            await foreach (var content in this.GetChatCompletionService()
-                               .GetStreamingChatMessageContentsAsync(chatHistory, executionSettings, kernel, cancellationToken).ConfigureAwait(false))
+            await foreach (var content in this.GetChatCompletionService().GetStreamingChatMessageContentsAsync(chatHistory, executionSettings, kernel, cancellationToken).ConfigureAwait(false))
             {
                 yield return content;
             }
@@ -224,9 +219,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         var hasFunctionCall = false;
         var functionCallContent = new List<StreamingChatMessageContent>();
 
-        await foreach (var content in this.GetChatCompletionService()
-                           .GetStreamingChatMessageContentsAsync(modifiedChatHistory, executionSettings, kernel, cancellationToken)
-                           .ConfigureAwait(false))
+        await foreach (var content in this.GetChatCompletionService().GetStreamingChatMessageContentsAsync(modifiedChatHistory, executionSettings, kernel, cancellationToken).ConfigureAwait(false))
         {
             responseBuilder.Append(content.Content);
             functionCallContent.Add(content);
@@ -250,9 +243,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         if (hasFunctionCall)
         {
             var completeResponse = new ChatMessageContent(AuthorRole.Assistant, responseBuilder.ToString());
-            var processedResponse = await this
-                .ProcessSingleChatMessageForFunctionCallsAsync(completeResponse, toolCallingConfig, chatHistory, 0, executionSettings, kernel,
-                    cancellationToken).ConfigureAwait(false);
+            var processedResponse = await this.ProcessSingleChatMessageForFunctionCallsAsync(completeResponse, toolCallingConfig, chatHistory, 0, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
 
             // Yield the processed response instead of the original JSON
             if (processedResponse.Content != completeResponse.Content)
@@ -368,9 +359,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         foreach (var result in results)
         {
             this._logger.LogInformation("Processing result: {Content}", result.Content);
-            var processedResult = await this
-                .ProcessSingleChatMessageForFunctionCallsAsync(result, toolCallingConfig, chatHistory, requestIndex, executionSettings, kernel,
-                    cancellationToken).ConfigureAwait(false);
+            var processedResult = await this.ProcessSingleChatMessageForFunctionCallsAsync(result, toolCallingConfig, chatHistory, requestIndex, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
             this._logger.LogInformation("Processed result: {Content}", processedResult.Content);
             processedResults.Add(processedResult);
         }
@@ -416,7 +405,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         if (functionCall == null)
         {
             this._logger.LogInformation("Detected natural language response with response_format: {ResponseFormat}", responseFormat);
-            
+
             // Create a new message with the response format content
             var newContent = !string.IsNullOrEmpty(responseFormat) ? responseFormat : result.Content;
             return new ChatMessageContent(AuthorRole.Assistant, newContent);
@@ -488,6 +477,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         CancellationToken cancellationToken)
     {
         this._logger.LogInformation("Manual fallback invoked for function: {FunctionName}", functionCall.FunctionName);
+
 
         try
         {
@@ -581,7 +571,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         {
             var firstLine = lines[0].Trim();
             var remainingText = string.Join("\n", lines.Skip(1)).Trim();
-            
+
             // Check if first line is JSON with empty function_call
             var jsonResult = TryParseJsonFunctionCallWithResponse(firstLine);
             if (jsonResult != null && jsonResult.Value.FunctionCall == null)
@@ -717,7 +707,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         return null;
     }
 
-    /// <summary>
+        /// <summary>
     /// Tries to parse a function call with response format from JSON content.
     /// </summary>
     private static (FunctionCallContent? FunctionCall, string? ResponseFormat)? TryParseJsonFunctionCallWithResponse(string jsonContent)
@@ -734,6 +724,17 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
                     responseFormat = responseFormatElement.GetString();
                 }
 
+                // Check if function_call is a string (direct function name)
+                if (functionCallElement.ValueKind == JsonValueKind.String)
+                {
+                    var functionName = functionCallElement.GetString();
+                    if (!string.IsNullOrEmpty(functionName))
+                    {
+                        var functionCall = OnnxFunction.ParseFunctionCall(functionName, "{}");
+                        return (functionCall, responseFormat);
+                    }
+                }
+
                 // Check if this is a natural language response (empty function_call)
                 if (functionCallElement.ValueKind == JsonValueKind.Object && 
                     functionCallElement.EnumerateObject().Count() == 0)
@@ -742,7 +743,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
                     return (null, responseFormat);
                 }
 
-                // Check if this is an actual function call
+                // Check if this is an actual function call with name and arguments
                 if (functionCallElement.TryGetProperty("name", out var nameElement) &&
                     functionCallElement.TryGetProperty("arguments", out var argumentsElement))
                 {
