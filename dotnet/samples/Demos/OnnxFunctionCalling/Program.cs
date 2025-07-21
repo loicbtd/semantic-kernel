@@ -1,54 +1,94 @@
 ﻿using System;
+using System.Threading.Tasks;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.Onnx;
 using OnnxFunctionCalling.Plugins;
 
-var builder = Kernel.CreateBuilder();
-var modelId = "Phi_4_multimodal_instruct";
-var modelPath = "D:\\VisionCATS_AI_Agent\\Development\\.cache\\models\\microsoft_Phi_4_multimodal_instruct_onnx-gpu_gpu_int4_rtn_block_32";
+async Task DoLoop(ChatHistory history, IChatCompletionService chatCompletionService, OnnxRuntimeGenAIPromptExecutionSettings settings, Kernel kernel)
+{
+    while (true)
+    {
+        Console.Write("User > ");
+        string userMessage = Console.ReadLine()!;
+        if (userMessage == "exit" || userMessage == "quit")
+        {
+            break;
+        }
 
+        if (string.IsNullOrEmpty(userMessage))
+        {
+            continue;
+        }
+
+        history.AddUserMessage(userMessage);
+
+        try
+        {
+            ChatMessageContent results = await chatCompletionService.GetChatMessageContentAsync(history, settings, kernel);
+            Console.WriteLine($"Assistant > {results.Content}");
+            history.AddAssistantMessage(results.Content!);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e.Message);
+        }
+    }
+}
+
+async Task DoDemo(ChatHistory history, IChatCompletionService chatCompletionService, OnnxRuntimeGenAIPromptExecutionSettings settings, Kernel kernel)
+{
+    string userMessage = "change the alarm to 8";
+    Console.WriteLine($"User > {userMessage}");
+    history.AddUserMessage(userMessage);
+    ChatMessageContent results = await chatCompletionService.GetChatMessageContentAsync(history, settings, kernel);
+    Console.WriteLine($"Assistant > {results.Content}");
+    history.AddAssistantMessage(results.Content!);
+}
+
+string modelId = "Phi_4_multimodal_instruct";
+string modelPath = "D:\\VisionCATS_AI_Agent\\Development\\.cache\\models\\microsoft_Phi_4_multimodal_instruct_onnx-gpu_gpu_int4_rtn_block_32";
+
+IKernelBuilder builder = Kernel.CreateBuilder();
 builder.AddOnnxRuntimeGenAIFunctionCallingChatCompletion(
     modelPath: modelPath,
     serviceId: "onnx",
     providers: ["cuda"]
 );
-
 builder.Plugins
     .AddFromType<MyTimePlugin>()
     .AddFromObject(new MyLightPlugin(turnedOn: true))
     .AddFromObject(new MyAlarmPlugin("11"));
 
-var kernel = builder.Build();
-var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
-var settings = new OnnxRuntimeGenAIPromptExecutionSettings
+Kernel kernel = builder.Build();
+
+ChatHistory history = [];
+history.AddSystemMessage("""
+                         You are a helpful assistant.
+                         You are not restricted to using the provided plugins,
+                         and you can use information from your training.
+                         Please explain your reasoning with the response.
+                         """);
+
+IChatCompletionService chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
+OnnxRuntimeGenAIPromptExecutionSettings settings = new()
 {
-    FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+    FunctionChoiceBehavior = FunctionChoiceBehavior.Auto(),
+    ToolCallBehavior = OnnxToolCallBehavior.AutoInvokeKernelFunctions
 };
 
 Console.WriteLine("""
                   Ask questions or give instructions to the copilot such as:
-                  - Change the alarm to 8
-                  - What is the current alarm set?
-                  - Is the light on?
-                  - Turn the light off please.
-                  - Set an alarm for 6:00 am.
+                  - change the alarm to 8
+                  - what is the current alarm set?
+                  - is the light on?
+                  - turn the light off please
+                  - set an alarm for 6:00 am
                   """);
 
-Console.Write("> ");
+await DoDemo(history, chatCompletionService, settings, kernel);
 
-string? input = null;
-while ((input = Console.ReadLine()) is not null)
+if (chatCompletionService is OnnxRuntimeGenAIFunctionCallingChatCompletionService onnxService)
 {
-    Console.WriteLine();
-
-    try
-    {
-        ChatMessageContent chatResult = await chatCompletionService.GetChatMessageContentAsync(input, settings, kernel);
-        Console.Write($"\n>>> Result: {chatResult}\n\n> ");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error: {ex.Message}\n\n> ");
-    }
+    onnxService.Dispose();
 }
