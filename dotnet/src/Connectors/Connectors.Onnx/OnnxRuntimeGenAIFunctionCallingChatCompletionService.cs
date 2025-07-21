@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -38,22 +39,20 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
     /// <summary>
     /// Initializes a new instance of the OnnxRuntimeGenAIFunctionCallingChatCompletionService class.
     /// </summary>
-    /// <param name="modelId">The name of the model.</param>
     /// <param name="modelPath">The generative AI ONNX model path for the chat completion service.</param>
+    /// <param name="modelId">The name of the model.</param>
     /// <param name="loggerFactory">Optional logger factory to be used for logging.</param>
     /// <param name="jsonSerializerOptions">The <see cref="JsonSerializerOptions"/> to use for various aspects of serialization and deserialization required by the service.</param>
     /// <param name="providers">The providers to use for the chat completion service.</param>
     public OnnxRuntimeGenAIFunctionCallingChatCompletionService(
-        string modelId,
         string modelPath,
+        string? modelId = null,
         ILoggerFactory? loggerFactory = null,
         JsonSerializerOptions? jsonSerializerOptions = null,
         List<string>? providers = null)
     {
-        Verify.NotNullOrWhiteSpace(modelId);
         Verify.NotNullOrWhiteSpace(modelPath);
-
-        this._attributesInternal.Add(AIServiceExtensions.ModelIdKey, modelId);
+        this._attributesInternal.Add(AIServiceExtensions.ModelIdKey, modelId ?? Path.GetFileName(modelPath));
         this._config = new Config(modelPath);
         if (providers != null)
         {
@@ -66,17 +65,15 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
 
         this._model = new Model(this._config);
 
-        this._logger = loggerFactory?.CreateLogger<OnnxRuntimeGenAIFunctionCallingChatCompletionService>() ??
-                       NullLogger<OnnxRuntimeGenAIFunctionCallingChatCompletionService>.Instance;
+        this._logger = loggerFactory?.CreateLogger<OnnxRuntimeGenAIFunctionCallingChatCompletionService>() ?? NullLogger<OnnxRuntimeGenAIFunctionCallingChatCompletionService>.Instance;
         this._functionCallsProcessor = new FunctionCallsProcessor(this._logger);
 
-        this._logger.LogInformation("OnnxRuntimeGenAIFunctionCallingChatCompletionService initialized with model: {ModelId} at path: {ModelPath}",
-            modelId, modelPath);
+        this._logger.LogInformation("OnnxRuntimeGenAIFunctionCallingChatCompletionService initialized with model: {ModelId} at path: {ModelPath}", modelId, modelPath);
     }
 
     private IChatCompletionService GetChatCompletionService()
     {
-        this._chatClient ??= new OnnxRuntimeGenAIChatClient(this._model, true, new OnnxRuntimeGenAIChatClientOptions
+        this._chatClient ??= new OnnxRuntimeGenAIChatClient(this._model, false, new OnnxRuntimeGenAIChatClientOptions
         {
             PromptFormatter = (messages, options) =>
             {
@@ -134,9 +131,9 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
     /// <inheritdoc/>
     public void Dispose()
     {
-        this._chatClient?.Dispose();
         this._model.Dispose();
         this._config.Dispose();
+        this._chatClient?.Dispose();
     }
 
     /// <inheritdoc/>

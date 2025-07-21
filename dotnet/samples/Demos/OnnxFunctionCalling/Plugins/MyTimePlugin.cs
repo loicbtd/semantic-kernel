@@ -4,7 +4,7 @@ using System;
 using System.ComponentModel;
 using Microsoft.SemanticKernel;
 
-namespace OnnxFunctionCalling;
+namespace OnnxFunctionCalling.Plugins;
 
 /// <summary>
 /// Simple plugin that just returns the time.

@@ -3,7 +3,7 @@
 using System.ComponentModel;
 using Microsoft.SemanticKernel;
 
-namespace OnnxFunctionCalling;
+namespace OnnxFunctionCalling.Plugins;
 
 /// <summary>
 /// Class that represents a controllable light bulb.

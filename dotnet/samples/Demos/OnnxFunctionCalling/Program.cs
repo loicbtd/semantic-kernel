@@ -2,13 +2,17 @@
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.Onnx;
-using OnnxFunctionCalling;
+using OnnxFunctionCalling.Plugins;
 
 var builder = Kernel.CreateBuilder();
-var modelId = "llama3.2";
+var modelId = "Phi_4_multimodal_instruct";
 var modelPath = "D:\\VisionCATS_AI_Agent\\Development\\.cache\\models\\microsoft_Phi_4_multimodal_instruct_onnx-gpu_gpu_int4_rtn_block_32";
 
-builder.Services.AddOnnxRuntimeGenAIChatCompletion(modelId, modelPath);
+builder.AddOnnxRuntimeGenAIFunctionCallingChatCompletion(
+    modelPath: modelPath,
+    serviceId: "onnx",
+    providers: ["cuda"]
+);
 
 builder.Plugins
     .AddFromType<MyTimePlugin>()
