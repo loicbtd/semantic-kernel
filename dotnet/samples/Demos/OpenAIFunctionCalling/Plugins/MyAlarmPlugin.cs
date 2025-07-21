@@ -3,7 +3,7 @@
 using System.ComponentModel;
 using Microsoft.SemanticKernel;
 
-namespace OnnxFunctionCalling.Plugins;
+namespace OpenAIFunctionCalling.Plugins;
 
 /// <summary>
 /// Class that represents a controllable alarm.

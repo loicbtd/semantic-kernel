@@ -169,7 +169,16 @@ public sealed class OnnxFunction
                 var jsonDocument = JsonDocument.Parse(argumentsJson);
                 foreach (var property in jsonDocument.RootElement.EnumerateObject())
                 {
-                    arguments[property.Name] = property.Value.GetRawText();
+                    // Parse the actual value instead of raw text
+                    arguments[property.Name] = property.Value.ValueKind switch
+                    {
+                        JsonValueKind.String => property.Value.GetString(),
+                        JsonValueKind.Number => property.Value.TryGetInt32(out int intValue) ? intValue : property.Value.GetDouble(),
+                        JsonValueKind.True => true,
+                        JsonValueKind.False => false,
+                        JsonValueKind.Null => null,
+                        _ => property.Value.GetRawText()
+                    };
                 }
             }
             catch (JsonException)

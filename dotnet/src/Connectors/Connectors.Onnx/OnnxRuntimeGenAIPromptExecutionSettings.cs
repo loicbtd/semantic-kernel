@@ -1,9 +1,11 @@
 // Copyright (c) Microsoft. All rights reserved.
 
+using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
+using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Text;
 
 namespace Microsoft.SemanticKernel.Connectors.Onnx;
@@ -180,5 +182,36 @@ public sealed class OnnxRuntimeGenAIPromptExecutionSettings : PromptExecutionSet
     /// <see cref="ChatHistory"/> if an instance was provided.
     /// </remarks>
     [JsonIgnore]
-    public OnnxToolCallBehavior? ToolCallBehavior { get; set; }
+    public OnnxToolCallBehavior? ToolCallBehavior
+    {
+        get => _toolCallBehavior;
+        set
+        {
+            if (value is not null && this.FunctionChoiceBehavior is not null)
+            {
+                throw new InvalidOperationException("ToolCallBehavior and FunctionChoiceBehavior cannot be used together. Please use only one of them.");
+            }
+            _toolCallBehavior = value;
+        }
+    }
+
+    private OnnxToolCallBehavior? _toolCallBehavior;
+
+    /// <summary>
+    /// Gets or sets the function choice behavior for the ONNX model.
+    /// Cannot be used together with ToolCallBehavior.
+    /// </summary>
+    [JsonIgnore]
+    public new FunctionChoiceBehavior? FunctionChoiceBehavior
+    {
+        get => base.FunctionChoiceBehavior;
+        set
+        {
+            if (value is not null && this.ToolCallBehavior is not null)
+            {
+                throw new InvalidOperationException("ToolCallBehavior and FunctionChoiceBehavior cannot be used together. Please use only one of them.");
+            }
+            base.FunctionChoiceBehavior = value;
+        }
+    }
 }

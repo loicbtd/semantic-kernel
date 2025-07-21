@@ -1,13 +1,10 @@
-﻿using System;
-using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.SemanticKernel;
+﻿using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
-using Microsoft.SemanticKernel.Connectors.Onnx;
-using OnnxFunctionCalling.Plugins;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using OpenAI;
+using OpenAIFunctionCalling.Plugins;
 
-async Task DoLoop(ChatHistory history, IChatCompletionService chatCompletionService, OnnxRuntimeGenAIPromptExecutionSettings settings, Kernel kernel)
+async Task DoLoop(ChatHistory history, IChatCompletionService chatCompletionService, OpenAIPromptExecutionSettings settings, Kernel kernel)
 {
     while (true)
     {
@@ -38,7 +35,7 @@ async Task DoLoop(ChatHistory history, IChatCompletionService chatCompletionServ
     }
 }
 
-async Task DoDemo(ChatHistory history, IChatCompletionService chatCompletionService, OnnxRuntimeGenAIPromptExecutionSettings settings, Kernel kernel)
+async Task DoDemo(ChatHistory history, IChatCompletionService chatCompletionService, OpenAIPromptExecutionSettings settings, Kernel kernel)
 {
     string userMessage = "change the alarm to 8";
     Console.WriteLine($"User > {userMessage}");
@@ -48,21 +45,8 @@ async Task DoDemo(ChatHistory history, IChatCompletionService chatCompletionServ
     history.AddAssistantMessage(results.Content!);
 }
 
-ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
-{
-    builder.AddConsole();
-});
-
-string modelId = "Phi_4_multimodal_instruct";
-string modelPath = "D:\\VisionCATS_AI_Agent\\Development\\.cache\\models\\microsoft_Phi_4_multimodal_instruct_onnx-gpu_gpu_int4_rtn_block_32";
-
 IKernelBuilder builder = Kernel.CreateBuilder();
-builder.AddOnnxRuntimeGenAIFunctionCallingChatCompletion(
-    modelPath: modelPath,
-    serviceId: "onnx",
-    providers: ["cuda"],
-    loggerFactory: loggerFactory
-);
+builder.AddOpenAIChatCompletion("o4-mini-2025-04-16", new OpenAIClient(""));
 builder.Plugins
     .AddFromType<MyTimePlugin>()
     .AddFromObject(new MyLightPlugin(turnedOn: true))
@@ -71,14 +55,15 @@ builder.Plugins
 Kernel kernel = builder.Build();
 
 ChatHistory history = [];
-// history.AddSystemMessage("""
-//                          You are a helpful assistant.
-//                          Answer questions directly and concisely.
-//                          Provide brief, clear responses without unnecessary explanations.
-//                          """);
+history.AddSystemMessage("""
+                         You are a helpful assistant.
+                         You are not restricted to using the provided plugins,
+                         and you can use information from your training.
+                         Please explain your reasoning with the response.
+                         """);
 
 IChatCompletionService chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
-OnnxRuntimeGenAIPromptExecutionSettings settings = new()
+OpenAIPromptExecutionSettings settings = new()
 {
     FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
 };
@@ -93,8 +78,3 @@ Console.WriteLine("""
                   """);
 
 await DoLoop(history, chatCompletionService, settings, kernel);
-
-if (chatCompletionService is OnnxRuntimeGenAIFunctionCallingChatCompletionService onnxService)
-{
-    onnxService.Dispose();
-}

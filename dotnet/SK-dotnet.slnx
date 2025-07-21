@@ -10,7 +10,7 @@
     <File Path="samples/README.md" />
   </Folder>
   <Folder Name="/samples/Demos/">
-    <Project Path="samples/Demos/AIModelRouter/AIModelRouter.csproj" />
+    <Project Path="AIModelRouter/AIModelRouter.csproj" />
     <Project Path="samples/Demos/AmazonBedrockModels/AmazonBedrockAIModels.csproj" />
     <Project Path="samples/Demos/AotCompatibility/AotCompatibility.csproj" />
     <Project Path="samples/Demos/BookingRestaurant/BookingRestaurant.csproj" />
@@ -31,6 +31,7 @@
     <Project Path="samples/Demos/TelemetryWithAppInsights/TelemetryWithAppInsights.csproj" />
     <Project Path="samples/Demos/TimePlugin/TimePlugin.csproj" />
     <Project Path="samples/Demos/VectorStoreRAG/VectorStoreRAG.csproj" />
+    <Project Path="samples\Demos\OpenAIFunctionCalling\OpenAIFunctionCalling.csproj" Type="Classic C#" />
     <File Path="samples/Demos/README.md" />
   </Folder>
   <Folder Name="/samples/Demos/A2AClientServer/">

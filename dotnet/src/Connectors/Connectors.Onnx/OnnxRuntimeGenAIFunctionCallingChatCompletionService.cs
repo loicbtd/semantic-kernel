@@ -146,13 +146,14 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         this._logger.LogInformation("GetChatMessageContentsAsync called");
 
         var onnxExecutionSettings = GetOnnxExecutionSettings(executionSettings);
-        var toolCallingConfig = GetToolCallingConfig(onnxExecutionSettings, kernel, chatHistory, 0);
+        this._logger.LogInformation("ONNX execution settings: {Settings}", onnxExecutionSettings.FunctionChoiceBehavior?.GetType().Name ?? "null");
+
+        var toolCallingConfig = this.GetToolCallingConfig(onnxExecutionSettings, kernel, chatHistory, 0);
 
         this._logger.LogInformation("Tool calling config: {Config}", toolCallingConfig != null ? "configured" : "null");
         if (toolCallingConfig != null)
         {
-            this._logger.LogInformation("Tools count: {Count}, AutoInvoke: {AutoInvoke}", toolCallingConfig.Tools?.Count ?? 0,
-                toolCallingConfig.AutoInvoke);
+            this._logger.LogInformation("Tools count: {Count}, AutoInvoke: {AutoInvoke}", toolCallingConfig.Tools?.Count ?? 0, toolCallingConfig.AutoInvoke);
         }
 
         // If no function calling is configured, use the base service
@@ -177,6 +178,14 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         }
 
         // Process the results for function calls
+        ChatMessageContent? first = null;
+        foreach (ChatMessageContent result in results)
+        {
+            first = result;
+            break;
+        }
+
+        this._logger.LogInformation("About to process results for function calls. Raw result content: {Content}", first?.Content);
         var processedResults = await this.ProcessChatMessageContentsAsync(results, toolCallingConfig, chatHistory, 0, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
 
         this._logger.LogInformation("Processed {Count} results", processedResults.Count);
@@ -288,12 +297,37 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         ChatHistory chatHistory,
         int requestIndex)
     {
-        if (executionSettings.ToolCallBehavior is null)
+        // First try ToolCallBehavior (ONNX-specific)
+        if (executionSettings.ToolCallBehavior is not null)
         {
-            return null;
+            return executionSettings.ToolCallBehavior.ConfigureRequest(kernel, chatHistory, requestIndex);
         }
 
-        return executionSettings.ToolCallBehavior.ConfigureRequest(kernel, chatHistory, requestIndex);
+        // Then try FunctionChoiceBehavior (standard Semantic Kernel)
+        if (executionSettings.FunctionChoiceBehavior is not null)
+        {
+            var config = this._functionCallsProcessor.GetConfiguration(
+                executionSettings.FunctionChoiceBehavior,
+                chatHistory,
+                requestIndex,
+                kernel);
+
+            if (config is not null)
+            {
+                // Convert to OnnxToolCallingConfig
+                return new OnnxToolCallingConfig(
+                    Tools: config.Functions?.Select(f => new OnnxFunction(
+                        f.Metadata.Name,
+                        f.Metadata.Description,
+                        f.Metadata.Parameters,
+                        f.Metadata.ReturnParameter)).ToList(),
+                    AutoInvoke: config.AutoInvoke,
+                    AllowAnyRequestedKernelFunction: false, // Standard behavior doesn't allow unrequested functions
+                    Options: config.Options);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -311,7 +345,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         {
             var functionsJson = CreateFunctionsJson(toolCallingConfig.Tools);
             var systemMessage =
-                $"You are a helpful assistant with access to the following functions:\n\n{functionsJson}\n\nIMPORTANT: When the user asks for information that requires a function, respond with ONLY JSON: {{\"function_call\": {{\"name\": \"function_name\", \"arguments\": {{}}}}}}\n\nWhen the user asks for natural language responses or general questions, respond with ONLY JSON: {{\"function_call\": {{}}, \"response_format\": \"your natural language response here\"}}\n\nYou can use {{result}} in response_format to include function results, or provide a complete sentence without placeholders.\n\nNEVER include explanatory text or code blocks. Respond with ONLY the JSON format.";
+                $"You are a helpful assistant with access to the following functions:\n\n{functionsJson}\n\nIMPORTANT: You MUST use these functions when the user's request relates to them. Do NOT provide general responses when a function is available.\n\nFor ANY user question that can be answered by calling a function, respond with raw JSON (no markdown formatting):\n{{\"function_call\": {{\"name\": \"function_name\", \"arguments\": {{\"param1\": \"value1\"}}}}}}\n\nFor natural language responses after function results, respond with JSON:\n{{\"function_call\": {{}}, \"response_format\": \"your response here\"}}\n\nReturn only the JSON object, without code blocks or markdown formatting. ALWAYS call the relevant function first. NEVER give general explanations when a function can handle the request.";
 
             modifiedChatHistory.AddSystemMessage(systemMessage);
         }
@@ -456,7 +490,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
 
         // Fallback: Manual function invocation if standard processing fails or returns JSON
         this._logger.LogInformation("Using manual fallback for function call");
-        return await TryManualFunctionInvocationAsync(result, functionCall, responseFormat, toolCallingConfig, kernel, cancellationToken).ConfigureAwait(false);
+        return await TryManualFunctionInvocationAsync(result, functionCall, responseFormat, toolCallingConfig, chatHistory, requestIndex, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -466,10 +500,13 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         ChatMessageContent result,
         FunctionCallContent functionCall,
         OnnxToolCallingConfig toolCallingConfig,
+        ChatHistory chatHistory,
+        int requestIndex,
+        PromptExecutionSettings? executionSettings,
         Kernel kernel,
         CancellationToken cancellationToken)
     {
-        return await TryManualFunctionInvocationAsync(result, functionCall, null, toolCallingConfig, kernel, cancellationToken).ConfigureAwait(false);
+        return await TryManualFunctionInvocationAsync(result, functionCall, null, toolCallingConfig, chatHistory, requestIndex, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -480,6 +517,9 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         FunctionCallContent functionCall,
         string? responseFormat,
         OnnxToolCallingConfig toolCallingConfig,
+        ChatHistory chatHistory,
+        int requestIndex,
+        PromptExecutionSettings? executionSettings,
         Kernel kernel,
         CancellationToken cancellationToken)
     {
@@ -495,17 +535,37 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
             }
 
             // Try to find the function in the kernel
-            var function = kernel.Plugins.GetFunction(functionCall.PluginName ?? "DefaultPlugin", functionCall.FunctionName);
+            KernelFunction? function = null;
+
+            // First try with the provided plugin name
+            if (!string.IsNullOrEmpty(functionCall.PluginName))
+            {
+                function = kernel.Plugins.GetFunction(functionCall.PluginName, functionCall.FunctionName);
+            }
+
+            // If not found, search across all plugins
             if (function == null)
             {
-                this._logger.LogWarning("Function {FunctionName} not found in kernel", functionCall.FunctionName);
+                foreach (var plugin in kernel.Plugins)
+                {
+                    if (plugin.TryGetFunction(functionCall.FunctionName, out function))
+                    {
+                        this._logger.LogInformation("Found function {FunctionName} in plugin {PluginName}", functionCall.FunctionName, plugin.Name);
+                        break;
+                    }
+                }
+            }
+
+            if (function == null)
+            {
+                this._logger.LogWarning("Function {FunctionName} not found in any plugin", functionCall.FunctionName);
                 return result;
             }
 
-            // Invoke the function
-            this._logger.LogInformation("Manually invoking function {PluginName}.{FunctionName}", function.PluginName, function.Name);
+            // Invoke the function with the parsed arguments
+            this._logger.LogInformation("Manually invoking function {PluginName}.{FunctionName} with arguments: {Arguments}", function.PluginName, function.Name, functionCall.Arguments != null ? string.Join(", ", functionCall.Arguments.Select(kv => $"{kv.Key}={kv.Value}")) : "none");
 
-            var functionResult = await kernel.InvokeAsync(function, arguments: null, cancellationToken).ConfigureAwait(false);
+            var functionResult = await kernel.InvokeAsync(function, functionCall.Arguments, cancellationToken).ConfigureAwait(false);
             var value = functionResult.GetValue<object>();
             string resultValue = value?.ToString() ?? "<null>";
 
@@ -519,16 +579,41 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
             }
             else
             {
+                // Return raw result - let the model handle natural language formatting like OpenAI does
                 finalResult = resultValue;
             }
 
-            // Create a new message with the function result
-            var functionResultMessage = new ChatMessageContent(AuthorRole.Assistant, finalResult ?? string.Empty);
-
             this._logger.LogInformation("Function {PluginName}.{FunctionName} returned: {Result}", function.PluginName, function.Name, resultValue);
-            this._logger.LogInformation("Manual fallback returning message: {Message}", functionResultMessage.Content);
 
-            return functionResultMessage;
+            // Implement OpenAI-style flow: pass the function result back to model for natural language generation
+            ChatHistory tempHistory = [];
+            foreach (ChatMessageContent message in chatHistory)
+            {
+                tempHistory.Add(message);
+            }
+
+            // Add the function call result as a tool message
+            tempHistory.Add(new ChatMessageContent(AuthorRole.Tool, $"Function {function.Name} returned: {finalResult}")
+            {
+                ModelId = functionCall.Id
+            });
+
+            // Ask the model to respond directly to the original user question using the function result
+            tempHistory.AddSystemMessage("Answer the user's original question directly and naturally using the function result.");
+
+            try
+            {
+                IReadOnlyList<ChatMessageContent> naturalResponse = await this.GetChatCompletionService().GetChatMessageContentsAsync(tempHistory, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
+                string response = naturalResponse.FirstOrDefault()?.Content ?? finalResult;
+
+                this._logger.LogInformation("Model generated natural response: {Response}", response);
+                return new ChatMessageContent(AuthorRole.Assistant, response);
+            }
+            catch (Exception ex)
+            {
+                this._logger.LogError(ex, "Failed to generate natural language response, returning formatted result");
+                return new ChatMessageContent(AuthorRole.Assistant, FormatFunctionResult(function.Name, resultValue));
+            }
         }
         catch (Exception ex)
         {
@@ -692,14 +777,19 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
             var jsonDocument = JsonDocument.Parse(jsonContent);
             if (jsonDocument.RootElement.TryGetProperty("function_call", out var functionCallElement))
             {
-                if (functionCallElement.TryGetProperty("name", out var nameElement) &&
-                    functionCallElement.TryGetProperty("arguments", out var argumentsElement))
+                if (functionCallElement.TryGetProperty("name", out var nameElement))
                 {
                     var functionName = nameElement.GetString();
-                    var argumentsJson = argumentsElement.GetRawText();
 
                     if (!string.IsNullOrEmpty(functionName))
                     {
+                        // Try to get arguments, use empty object if not present
+                        var argumentsJson = "{}";
+                        if (functionCallElement.TryGetProperty("arguments", out var argumentsElement))
+                        {
+                            argumentsJson = argumentsElement.GetRawText();
+                        }
+
                         return OnnxFunction.ParseFunctionCall(functionName, argumentsJson);
                     }
                 }
@@ -749,15 +839,20 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
                     return (null, responseFormat);
                 }
 
-                // Check if this is an actual function call with name and arguments
-                if (functionCallElement.TryGetProperty("name", out var nameElement) &&
-                    functionCallElement.TryGetProperty("arguments", out var argumentsElement))
+                // Check if this is an actual function call with name (arguments are optional)
+                if (functionCallElement.TryGetProperty("name", out var nameElement))
                 {
                     var functionName = nameElement.GetString();
-                    var argumentsJson = argumentsElement.GetRawText();
 
                     if (!string.IsNullOrEmpty(functionName))
                     {
+                        // Try to get arguments, use empty object if not present
+                        var argumentsJson = "{}";
+                        if (functionCallElement.TryGetProperty("arguments", out var argumentsElement))
+                        {
+                            argumentsJson = argumentsElement.GetRawText();
+                        }
+
                         var functionCall = OnnxFunction.ParseFunctionCall(functionName, argumentsJson);
                         return (functionCall, responseFormat);
                     }
@@ -788,6 +883,27 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         }
 
         return toolCallingConfig.Tools.Any(tool => tool.FunctionName == functionCallContent.FunctionName);
+    }
+
+    /// <summary>
+    /// Formats function result for better user experience.
+    /// </summary>
+    private static string FormatFunctionResult(string functionName, string functionResult)
+    {
+        // Handle null/empty results (typically from void functions)
+        if (string.IsNullOrEmpty(functionResult) || functionResult == "<null>")
+        {
+            return "Done.";
+        }
+
+        // Handle boolean results more naturally
+        if (bool.TryParse(functionResult, out bool boolResult))
+        {
+            return boolResult ? "Yes." : "No.";
+        }
+
+        // Return the result as-is for all other cases
+        return functionResult;
     }
 
     /// <summary>
