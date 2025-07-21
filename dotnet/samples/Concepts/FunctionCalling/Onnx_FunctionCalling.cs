@@ -19,7 +19,7 @@ public class Onnx_FunctionCalling(ITestOutputHelper output) : BaseTest(output)
     [Fact]
     public async Task FunctionCallingAutoInvokeAsync()
     {
-        string modelPath = "D:\\VisionCATS_AI_Agent\\Development\\.cache\\models\\microsoft_Phi_4_multimodal_instruct_onnx-gpu_gpu_int4_rtn_block_32";
+        string modelPath = "path/to/your/onnx/model";
         string modelId = "phi-3-mini-4k-instruct";
 
         // Create a kernel with the ONNX function calling chat completion service
@@ -51,7 +51,7 @@ public class Onnx_FunctionCalling(ITestOutputHelper output) : BaseTest(output)
     [Fact]
     public async Task FunctionCallingManualInvokeAsync()
     {
-        string modelPath = "D:\\VisionCATS_AI_Agent\\Development\\.cache\\models\\microsoft_Phi_4_multimodal_instruct_onnx-gpu_gpu_int4_rtn_block_32";
+        string modelPath = "path/to/your/onnx/model";
         string modelId = "phi-3-mini-4k-instruct";
 
         // Create a kernel with the ONNX function calling chat completion service
@@ -83,7 +83,7 @@ public class Onnx_FunctionCalling(ITestOutputHelper output) : BaseTest(output)
     [Fact]
     public async Task FunctionCallingSpecificFunctionsAsync()
     {
-        string modelPath = "D:\\VisionCATS_AI_Agent\\Development\\.cache\\models\\microsoft_Phi_4_multimodal_instruct_onnx-gpu_gpu_int4_rtn_block_32";
+        string modelPath = "path/to/your/onnx/model";
         string modelId = "phi-3-mini-4k-instruct";
 
         // Create a kernel with the ONNX function calling chat completion service

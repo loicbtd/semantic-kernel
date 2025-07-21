@@ -1,24 +1,5 @@
 <Solution>
-  <Folder Name="/Solution Items/">
-    <File Path="../.editorconfig" />
-    <File Path="../.github/workflows/dotnet-format.yml" />
-    <File Path="../.gitignore" />
-    <File Path="../nuget.config" />
-    <File Path="../README.md" />
-    <File Path="Directory.Build.props" />
-    <File Path="Directory.Build.targets" />
-    <File Path="Directory.Packages.props" />
-    <File Path="docs/EXPERIMENTS.md" />
-    <File Path="global.json" />
-  </Folder>
-  <Folder Name="/Solution Items/nuget/">
-    <File Path="nuget/icon.png" />
-    <File Path="nuget/nuget-package.props" />
-    <File Path="nuget/NUGET.md" />
-    <File Path="nuget/VECTORDATA-CONNECTORS-NUGET.md" />
-  </Folder>
   <Folder Name="/samples/">
-    <File Path="samples/README.md" />
     <Project Path="samples/Concepts/Concepts.csproj" />
     <Project Path="samples/GettingStarted/GettingStarted.csproj" />
     <Project Path="samples/GettingStartedWithAgents/GettingStartedWithAgents.csproj" />
@@ -26,9 +7,9 @@
     <Project Path="samples/GettingStartedWithTextSearch/GettingStartedWithTextSearch.csproj" />
     <Project Path="samples/GettingStartedWithVectorStores/GettingStartedWithVectorStores.csproj" />
     <Project Path="samples/LearnResources/LearnResources.csproj" />
+    <File Path="samples/README.md" />
   </Folder>
   <Folder Name="/samples/Demos/">
-    <File Path="samples/Demos/README.md" />
     <Project Path="samples/Demos/AIModelRouter/AIModelRouter.csproj" />
     <Project Path="samples/Demos/AmazonBedrockModels/AmazonBedrockAIModels.csproj" />
     <Project Path="samples/Demos/AotCompatibility/AotCompatibility.csproj" />
@@ -50,39 +31,58 @@
     <Project Path="samples/Demos/TelemetryWithAppInsights/TelemetryWithAppInsights.csproj" />
     <Project Path="samples/Demos/TimePlugin/TimePlugin.csproj" />
     <Project Path="samples/Demos/VectorStoreRAG/VectorStoreRAG.csproj" />
+    <File Path="samples/Demos/README.md" />
   </Folder>
   <Folder Name="/samples/Demos/A2AClientServer/">
     <Project Path="samples/Demos/A2AClientServer/A2AClient/A2AClient.csproj" />
     <Project Path="samples/Demos/A2AClientServer/A2AServer/A2AServer.csproj" />
   </Folder>
   <Folder Name="/samples/Demos/AgentFrameworkWithAspire/">
-    <File Path="samples/Demos/AgentFrameworkWithAspire/README.md" />
     <Project Path="samples/Demos/AgentFrameworkWithAspire/ChatWithAgent.ApiService/ChatWithAgent.ApiService.csproj" />
     <Project Path="samples/Demos/AgentFrameworkWithAspire/ChatWithAgent.AppHost/ChatWithAgent.AppHost.csproj" />
     <Project Path="samples/Demos/AgentFrameworkWithAspire/ChatWithAgent.Configuration/ChatWithAgent.Configuration.csproj" />
     <Project Path="samples/Demos/AgentFrameworkWithAspire/ChatWithAgent.ServiceDefaults/ChatWithAgent.ServiceDefaults.csproj" />
     <Project Path="samples/Demos/AgentFrameworkWithAspire/ChatWithAgent.Web/ChatWithAgent.Web.csproj" />
+    <File Path="samples/Demos/AgentFrameworkWithAspire/README.md" />
   </Folder>
   <Folder Name="/samples/Demos/ModelContextProtocolClientServer/">
-    <File Path="samples/Demos/ModelContextProtocolClientServer/README.md" />
     <Project Path="samples/Demos/ModelContextProtocolClientServer/MCPClient/MCPClient.csproj">
       <BuildDependency Project="samples/Demos/ModelContextProtocolClientServer/MCPServer/MCPServer.csproj" />
     </Project>
     <Project Path="samples/Demos/ModelContextProtocolClientServer/MCPServer/MCPServer.csproj" />
+    <File Path="samples/Demos/ModelContextProtocolClientServer/README.md" />
   </Folder>
   <Folder Name="/samples/Demos/ProcessFrameworkWithAspire/">
-    <File Path="samples/Demos/ProcessFrameworkWithAspire/README.md" />
     <Project Path="samples/Demos/ProcessFrameworkWithAspire/ProcessFramework.Aspire/ProcessFramework.Aspire.AppHost/ProcessFramework.Aspire.AppHost.csproj" />
     <Project Path="samples/Demos/ProcessFrameworkWithAspire/ProcessFramework.Aspire/ProcessFramework.Aspire.ProcessOrchestrator/ProcessFramework.Aspire.ProcessOrchestrator.csproj" />
     <Project Path="samples/Demos/ProcessFrameworkWithAspire/ProcessFramework.Aspire/ProcessFramework.Aspire.ServiceDefaults/ProcessFramework.Aspire.ServiceDefaults.csproj" />
     <Project Path="samples/Demos/ProcessFrameworkWithAspire/ProcessFramework.Aspire/ProcessFramework.Aspire.Shared/ProcessFramework.Aspire.Shared.csproj" />
     <Project Path="samples/Demos/ProcessFrameworkWithAspire/ProcessFramework.Aspire/ProcessFramework.Aspire.SummaryAgent/ProcessFramework.Aspire.SummaryAgent.csproj" />
     <Project Path="samples/Demos/ProcessFrameworkWithAspire/ProcessFramework.Aspire/ProcessFramework.Aspire.TranslatorAgent/ProcessFramework.Aspire.TranslatorAgent.csproj" />
+    <File Path="samples/Demos/ProcessFrameworkWithAspire/README.md" />
   </Folder>
   <Folder Name="/samples/Demos/ProcessWithCloudEvents/">
-    <File Path="samples/Demos/ProcessWithCloudEvents/README.md" />
     <Project Path="samples/Demos/ProcessWithCloudEvents/ProcessWithCloudEvents.Grpc/ProcessWithCloudEvents.Grpc.csproj" />
     <Project Path="samples/Demos/ProcessWithCloudEvents/ProcessWithCloudEvents.Processes/ProcessWithCloudEvents.Processes.csproj" />
+    <File Path="samples/Demos/ProcessWithCloudEvents/README.md" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="../.editorconfig" />
+    <File Path="../.github/workflows/dotnet-format.yml" />
+    <File Path="../.gitignore" />
+    <File Path="../nuget.config" />
+    <File Path="../README.md" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Build.targets" />
+    <File Path="Directory.Packages.props" />
+    <File Path="docs/EXPERIMENTS.md" />
+    <File Path="global.json" />
+  </Folder>
+  <Folder Name="/Solution Items/nuget/">
+    <File Path="nuget/icon.png" />
+    <File Path="nuget/nuget-package.props" />
+    <File Path="nuget/NUGET.md" />
+    <File Path="nuget/VECTORDATA-CONNECTORS-NUGET.md" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/IntegrationTests/IntegrationTests.csproj" />
@@ -133,24 +133,6 @@
     <Project Path="src/Connectors/Connectors.Onnx/Connectors.Onnx.csproj" />
     <Project Path="src/Connectors/Connectors.OpenAI.UnitTests/Connectors.OpenAI.UnitTests.csproj" />
     <Project Path="src/Connectors/Connectors.OpenAI/Connectors.OpenAI.csproj" />
-  </Folder>
-  <Folder Name="/src/VectorData/">
-    <File Path="src/VectorData/Directory.Build.props" />
-    <Project Path="src/VectorData/AzureAISearch/AzureAISearch.csproj" />
-    <Project Path="src/VectorData/Chroma/Chroma.csproj" />
-    <Project Path="src/VectorData/CosmosMongoDB/CosmosMongoDB.csproj" />
-    <Project Path="src/VectorData/CosmosNoSql/CosmosNoSql.csproj" />
-    <Project Path="src/VectorData/InMemory/InMemory.csproj" />
-    <Project Path="src/VectorData/Milvus/Milvus.csproj" />
-    <Project Path="src/VectorData/MongoDB/MongoDB.csproj" />
-    <Project Path="src/VectorData/PgVector/PgVector.csproj" />
-    <Project Path="src/VectorData/Pinecone/Pinecone.csproj" />
-    <Project Path="src/VectorData/Qdrant/Qdrant.csproj" />
-    <Project Path="src/VectorData/Redis/Redis.csproj" />
-    <Project Path="src/VectorData/SqliteVec/SqliteVec.csproj" />
-    <Project Path="src/VectorData/SqlServer/SqlServer.csproj" />
-    <Project Path="src/VectorData/VectorData.Abstractions/VectorData.Abstractions.csproj" />
-    <Project Path="src/VectorData/Weaviate/Weaviate.csproj" />
   </Folder>
   <Folder Name="/src/experimental/">
     <Project Path="src/Experimental/Orchestration.Flow.IntegrationTests/Experimental.Orchestration.Flow.IntegrationTests.csproj" />
@@ -305,6 +287,24 @@
     <Project Path="src/Plugins/Plugins.UnitTests/Plugins.UnitTests.csproj" />
     <Project Path="src/Plugins/Plugins.Web/Plugins.Web.csproj" />
   </Folder>
+  <Folder Name="/src/VectorData/">
+    <Project Path="src/VectorData/AzureAISearch/AzureAISearch.csproj" />
+    <Project Path="src/VectorData/Chroma/Chroma.csproj" />
+    <Project Path="src/VectorData/CosmosMongoDB/CosmosMongoDB.csproj" />
+    <Project Path="src/VectorData/CosmosNoSql/CosmosNoSql.csproj" />
+    <Project Path="src/VectorData/InMemory/InMemory.csproj" />
+    <Project Path="src/VectorData/Milvus/Milvus.csproj" />
+    <Project Path="src/VectorData/MongoDB/MongoDB.csproj" />
+    <Project Path="src/VectorData/PgVector/PgVector.csproj" />
+    <Project Path="src/VectorData/Pinecone/Pinecone.csproj" />
+    <Project Path="src/VectorData/Qdrant/Qdrant.csproj" />
+    <Project Path="src/VectorData/Redis/Redis.csproj" />
+    <Project Path="src/VectorData/SqliteVec/SqliteVec.csproj" />
+    <Project Path="src/VectorData/SqlServer/SqlServer.csproj" />
+    <Project Path="src/VectorData/VectorData.Abstractions/VectorData.Abstractions.csproj" />
+    <Project Path="src/VectorData/Weaviate/Weaviate.csproj" />
+    <File Path="src/VectorData/Directory.Build.props" />
+  </Folder>
   <Folder Name="/test/" />
   <Folder Name="/test/VectorData/">
     <Project Path="test/VectorData/AzureAISearch.ConformanceTests/AzureAISearch.ConformanceTests.csproj" />
@@ -334,4 +334,5 @@
     <Project Path="test/VectorData/Weaviate.ConformanceTests/Weaviate.ConformanceTests.csproj" />
     <Project Path="test/VectorData/Weaviate.UnitTests/Weaviate.UnitTests.csproj" />
   </Folder>
+  <Project Path="development\development.csproj" Type="Classic C#" />
 </Solution>
