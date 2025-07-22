@@ -71,11 +71,12 @@ builder.Plugins
 Kernel kernel = builder.Build();
 
 ChatHistory history = [];
-// history.AddSystemMessage("""
-//                          You are a helpful assistant.
-//                          Answer questions directly and concisely.
-//                          Provide brief, clear responses without unnecessary explanations.
-//                          """);
+history.AddSystemMessage("""
+                         You are a helpful assistant.
+                         You are not restricted to using the provided plugins,
+                         and you can use information from your training.
+                         Please explain your reasoning with the response.
+                         """);
 
 IChatCompletionService chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
 OnnxRuntimeGenAIPromptExecutionSettings settings = new()

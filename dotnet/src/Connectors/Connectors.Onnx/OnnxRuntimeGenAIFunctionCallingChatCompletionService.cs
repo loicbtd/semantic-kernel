@@ -8,7 +8,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -16,6 +15,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.ML.OnnxRuntimeGenAI;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.FunctionCalling;
+using Microsoft.SemanticKernel.Connectors.Onnx.Internal;
 using Microsoft.SemanticKernel.Services;
 
 namespace Microsoft.SemanticKernel.Connectors.Onnx;
@@ -29,6 +29,8 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
     private readonly Model _model;
     private readonly ILogger _logger;
     private readonly FunctionCallsProcessor _functionCallsProcessor;
+    private readonly OnnxFunctionCallParser _functionCallParser;
+    private OnnxFunctionInvoker? _functionInvoker;
     private OnnxRuntimeGenAIChatClient? _chatClient;
     private IChatCompletionService? _chatClientWrapper;
     private readonly Dictionary<string, object?> _attributesInternal = [];
@@ -67,8 +69,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
 
         this._logger = loggerFactory?.CreateLogger<OnnxRuntimeGenAIFunctionCallingChatCompletionService>() ?? NullLogger<OnnxRuntimeGenAIFunctionCallingChatCompletionService>.Instance;
         this._functionCallsProcessor = new FunctionCallsProcessor(this._logger);
-
-        this._logger.LogInformation("OnnxRuntimeGenAIFunctionCallingChatCompletionService initialized with model: {ModelId} at path: {ModelPath}", modelId, modelPath);
+        this._functionCallParser = new OnnxFunctionCallParser(this._logger);
     }
 
     private IChatCompletionService GetChatCompletionService()
@@ -89,43 +90,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
             }
         });
 
-        // Return a wrapper that handles the basic chat completion without function calling
-        return this._chatClientWrapper ??= new BasicOnnxChatCompletionService(this._chatClient);
-    }
-
-    /// <summary>
-    /// Basic chat completion service wrapper that doesn't handle function calling.
-    /// </summary>
-    private sealed class BasicOnnxChatCompletionService : IChatCompletionService
-    {
-        private readonly OnnxRuntimeGenAIChatClient _chatClient;
-        private readonly IChatCompletionService _wrappedService;
-
-        public BasicOnnxChatCompletionService(OnnxRuntimeGenAIChatClient chatClient)
-        {
-            this._chatClient = chatClient;
-            this._wrappedService = chatClient.AsChatCompletionService();
-        }
-
-        public IReadOnlyDictionary<string, object?> Attributes => this._wrappedService.Attributes;
-
-        public Task<IReadOnlyList<ChatMessageContent>> GetChatMessageContentsAsync(
-            ChatHistory chatHistory,
-            PromptExecutionSettings? executionSettings = null,
-            Kernel? kernel = null,
-            CancellationToken cancellationToken = default)
-        {
-            return this._wrappedService.GetChatMessageContentsAsync(chatHistory, executionSettings, kernel, cancellationToken);
-        }
-
-        public IAsyncEnumerable<StreamingChatMessageContent> GetStreamingChatMessageContentsAsync(
-            ChatHistory chatHistory,
-            PromptExecutionSettings? executionSettings = null,
-            Kernel? kernel = null,
-            CancellationToken cancellationToken = default)
-        {
-            return this._wrappedService.GetStreamingChatMessageContentsAsync(chatHistory, executionSettings, kernel, cancellationToken);
-        }
+        return this._chatClientWrapper ??= this._chatClient.AsChatCompletionService();
     }
 
     /// <inheritdoc/>
@@ -141,59 +106,24 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         ChatHistory chatHistory,
         PromptExecutionSettings? executionSettings = null,
         Kernel? kernel = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
-        this._logger.LogInformation("GetChatMessageContentsAsync called");
+        OnnxRuntimeGenAIPromptExecutionSettings onnxExecutionSettings = GetOnnxExecutionSettings(executionSettings);
 
-        var onnxExecutionSettings = GetOnnxExecutionSettings(executionSettings);
-        this._logger.LogInformation("ONNX execution settings: {Settings}", onnxExecutionSettings.FunctionChoiceBehavior?.GetType().Name ?? "null");
-
-        var toolCallingConfig = this.GetToolCallingConfig(onnxExecutionSettings, kernel, chatHistory, 0);
-
-        this._logger.LogInformation("Tool calling config: {Config}", toolCallingConfig != null ? "configured" : "null");
-        if (toolCallingConfig != null)
+        OnnxToolCallingConfig? toolCallingConfig = this.GetToolCallingConfig(onnxExecutionSettings, kernel, chatHistory, 0);
+        if (toolCallingConfig?.Tools is null || toolCallingConfig.Tools.Count == 0)
         {
-            this._logger.LogInformation("Tools count: {Count}, AutoInvoke: {AutoInvoke}", toolCallingConfig.Tools?.Count ?? 0, toolCallingConfig.AutoInvoke);
-        }
-
-        // If no function calling is configured, use the base service
-        if (toolCallingConfig is null || toolCallingConfig.Tools is null || toolCallingConfig.Tools.Count == 0)
-        {
-            this._logger.LogInformation("No function calling configured, using base service");
             return await this.GetChatCompletionService().GetChatMessageContentsAsync(chatHistory, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
         }
 
-        this._logger.LogInformation("Function calling is configured, processing with function calling");
-
         // Create a modified chat history with function definitions
-        var modifiedChatHistory = await this.CreateModifiedChatHistoryAsync(chatHistory, toolCallingConfig, cancellationToken).ConfigureAwait(false);
+        ChatHistory modifiedChatHistory = await this.CreateModifiedChatHistoryAsync(chatHistory, toolCallingConfig, cancellationToken).ConfigureAwait(false);
 
         // Get the response from the underlying service
-        var results = await this.GetChatCompletionService().GetChatMessageContentsAsync(modifiedChatHistory, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<ChatMessageContent> results = await this.GetChatCompletionService().GetChatMessageContentsAsync(modifiedChatHistory, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
 
-        this._logger.LogInformation("Got {Count} results from base service", results.Count);
-        foreach (var result in results)
-        {
-            this._logger.LogInformation("Result content: {Content}", result.Content);
-        }
-
-        // Process the results for function calls
-        ChatMessageContent? first = null;
-        foreach (ChatMessageContent result in results)
-        {
-            first = result;
-            break;
-        }
-
-        this._logger.LogInformation("About to process results for function calls. Raw result content: {Content}", first?.Content);
-        var processedResults = await this.ProcessChatMessageContentsAsync(results, toolCallingConfig, chatHistory, 0, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
-
-        this._logger.LogInformation("Processed {Count} results", processedResults.Count);
-        foreach (var result in processedResults)
-        {
-            this._logger.LogInformation("Processed result content: {Content}", result.Content);
-        }
-
+        IReadOnlyList<ChatMessageContent> processedResults = await this.ProcessChatMessageContentsAsync(results, toolCallingConfig, chatHistory, 0, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
         return processedResults;
     }
 
@@ -234,7 +164,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
 
             // Check if we have a complete function call
             var currentResponse = responseBuilder.ToString();
-            if (!hasFunctionCall && ContainsFunctionCall(currentResponse))
+            if (!hasFunctionCall && this._functionCallParser.ContainsFunctionCall(currentResponse))
             {
                 hasFunctionCall = true;
                 this._logger.LogInformation("Detected function call in streaming response");
@@ -344,8 +274,20 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         if (toolCallingConfig.Tools is not null && toolCallingConfig.Tools.Count > 0)
         {
             var functionsJson = CreateFunctionsJson(toolCallingConfig.Tools);
-            var systemMessage =
-                $"You are a helpful assistant with access to the following functions:\n\n{functionsJson}\n\nIMPORTANT: You MUST use these functions when the user's request relates to them. Do NOT provide general responses when a function is available.\n\nFor ANY user question that can be answered by calling a function, respond with raw JSON (no markdown formatting):\n{{\"function_call\": {{\"name\": \"function_name\", \"arguments\": {{\"param1\": \"value1\"}}}}}}\n\nFor natural language responses after function results, respond with JSON:\n{{\"function_call\": {{}}, \"response_format\": \"your response here\"}}\n\nReturn only the JSON object, without code blocks or markdown formatting. ALWAYS call the relevant function first. NEVER give general explanations when a function can handle the request.";
+            var systemMessage = "You are a helpful assistant with access to the following functions:"
+                                + functionsJson +
+                                """
+
+                                IMPORTANT: You MUST use these functions when the user's request relates to them. Do NOT provide general responses when a function is available.
+
+                                For ANY user question that can be answered by calling a function, respond with raw JSON (no markdown formatting):
+                                {"function_call": {"name": "function_name", "arguments": {"param1": "value1"}}}
+
+                                For natural language responses after function results, respond with JSON:
+                                {"function_call": {}, "response_format": "your response here"}
+
+                                Return only the JSON object, without code blocks or markdown formatting. ALWAYS call the relevant function first. NEVER give general explanations when a function can handle the request.
+                                """;
 
             modifiedChatHistory.AddSystemMessage(systemMessage);
         }
@@ -426,14 +368,14 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         }
 
         // Quick pre-check: if content doesn't contain function call patterns, skip parsing
-        if (!ContainsFunctionCall(result.Content))
+        if (!this._functionCallParser.ContainsFunctionCall(result.Content))
         {
             this._logger.LogDebug("Content does not contain function call patterns, skipping parsing");
             return result;
         }
 
         // Try to parse function call from the response
-        var parseResult = TryParseFunctionCallWithResponse(result.Content);
+        var parseResult = this._functionCallParser.TryParseFunctionCallWithResponse(result.Content);
         if (parseResult is null)
         {
             return result;
@@ -473,7 +415,7 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
             this._logger.LogInformation("Standard processing returned message: {Content}", lastMessage?.Content ?? "null");
 
             // Check if the standard processing actually replaced the JSON content
-            if (lastMessage != null && !ContainsFunctionCall(lastMessage.Content))
+            if (lastMessage != null && !this._functionCallParser.ContainsFunctionCall(lastMessage.Content))
             {
                 this._logger.LogInformation("Standard function call processing succeeded, content replaced");
                 return lastMessage;
@@ -490,381 +432,8 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
 
         // Fallback: Manual function invocation if standard processing fails or returns JSON
         this._logger.LogInformation("Using manual fallback for function call");
-        return await TryManualFunctionInvocationAsync(result, functionCall, responseFormat, toolCallingConfig, chatHistory, requestIndex, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Manual fallback for function invocation when standard processing fails.
-    /// </summary>
-    private async Task<ChatMessageContent> TryManualFunctionInvocationAsync(
-        ChatMessageContent result,
-        FunctionCallContent functionCall,
-        OnnxToolCallingConfig toolCallingConfig,
-        ChatHistory chatHistory,
-        int requestIndex,
-        PromptExecutionSettings? executionSettings,
-        Kernel kernel,
-        CancellationToken cancellationToken)
-    {
-        return await TryManualFunctionInvocationAsync(result, functionCall, null, toolCallingConfig, chatHistory, requestIndex, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Manual fallback for function invocation when standard processing fails.
-    /// </summary>
-    private async Task<ChatMessageContent> TryManualFunctionInvocationAsync(
-        ChatMessageContent result,
-        FunctionCallContent functionCall,
-        string? responseFormat,
-        OnnxToolCallingConfig toolCallingConfig,
-        ChatHistory chatHistory,
-        int requestIndex,
-        PromptExecutionSettings? executionSettings,
-        Kernel kernel,
-        CancellationToken cancellationToken)
-    {
-        this._logger.LogInformation("Manual fallback invoked for function: {FunctionName}", functionCall.FunctionName);
-
-        try
-        {
-            // Check if the function call is valid
-            if (!IsValidFunctionCall(functionCall, toolCallingConfig))
-            {
-                this._logger.LogWarning("Function call {FunctionName} is not in the allowed functions list", functionCall.FunctionName);
-                return result;
-            }
-
-            // Try to find the function in the kernel
-            KernelFunction? function = null;
-
-            // First try with the provided plugin name
-            if (!string.IsNullOrEmpty(functionCall.PluginName))
-            {
-                function = kernel.Plugins.GetFunction(functionCall.PluginName, functionCall.FunctionName);
-            }
-
-            // If not found, search across all plugins
-            if (function == null)
-            {
-                foreach (var plugin in kernel.Plugins)
-                {
-                    if (plugin.TryGetFunction(functionCall.FunctionName, out function))
-                    {
-                        this._logger.LogInformation("Found function {FunctionName} in plugin {PluginName}", functionCall.FunctionName, plugin.Name);
-                        break;
-                    }
-                }
-            }
-
-            if (function == null)
-            {
-                this._logger.LogWarning("Function {FunctionName} not found in any plugin", functionCall.FunctionName);
-                return result;
-            }
-
-            // Invoke the function with the parsed arguments
-            this._logger.LogInformation("Manually invoking function {PluginName}.{FunctionName} with arguments: {Arguments}", function.PluginName, function.Name, functionCall.Arguments != null ? string.Join(", ", functionCall.Arguments.Select(kv => $"{kv.Key}={kv.Value}")) : "none");
-
-            var functionResult = await kernel.InvokeAsync(function, functionCall.Arguments, cancellationToken).ConfigureAwait(false);
-            var value = functionResult.GetValue<object>();
-            string resultValue = value?.ToString() ?? "<null>";
-
-            // Apply post-processing if response format is specified
-            string finalResult;
-            if (!string.IsNullOrEmpty(responseFormat))
-            {
-                this._logger.LogInformation("Applying response format: {ResponseFormat}", responseFormat);
-                finalResult = ApplyResponseFormat(responseFormat, resultValue);
-                this._logger.LogInformation("Applied response format. Original: {Original}, Final: {Final}", resultValue, finalResult);
-            }
-            else
-            {
-                // Return raw result - let the model handle natural language formatting like OpenAI does
-                finalResult = resultValue;
-            }
-
-            this._logger.LogInformation("Function {PluginName}.{FunctionName} returned: {Result}", function.PluginName, function.Name, resultValue);
-
-            // Implement OpenAI-style flow: pass the function result back to model for natural language generation
-            ChatHistory tempHistory = [];
-            foreach (ChatMessageContent message in chatHistory)
-            {
-                tempHistory.Add(message);
-            }
-
-            // Add the function call result as a tool message
-            tempHistory.Add(new ChatMessageContent(AuthorRole.Tool, $"Function {function.Name} returned: {finalResult}")
-            {
-                ModelId = functionCall.Id
-            });
-
-            // Ask the model to respond directly to the original user question using the function result
-            tempHistory.AddSystemMessage("Answer the user's original question directly and naturally using the function result.");
-
-            try
-            {
-                IReadOnlyList<ChatMessageContent> naturalResponse = await this.GetChatCompletionService().GetChatMessageContentsAsync(tempHistory, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
-                string response = naturalResponse.FirstOrDefault()?.Content ?? finalResult;
-
-                this._logger.LogInformation("Model generated natural response: {Response}", response);
-                return new ChatMessageContent(AuthorRole.Assistant, response);
-            }
-            catch (Exception ex)
-            {
-                this._logger.LogError(ex, "Failed to generate natural language response, returning formatted result");
-                return new ChatMessageContent(AuthorRole.Assistant, FormatFunctionResult(function.Name, resultValue));
-            }
-        }
-        catch (Exception ex)
-        {
-            this._logger.LogError(ex, "Manual function invocation failed for {FunctionName}", functionCall.FunctionName);
-            return result;
-        }
-    }
-
-    /// <summary>
-    /// Tries to parse a function call from the model's response.
-    /// </summary>
-    private (FunctionCallContent? FunctionCall, string? ResponseFormat)? TryParseFunctionCallWithResponse(string? content)
-    {
-        if (string.IsNullOrEmpty(content))
-        {
-            return null;
-        }
-
-        this._logger.LogInformation("Attempting to parse function call from content: {Content}", content);
-
-        // First, try to parse the entire content as pure JSON with response format
-        var resultFromContent = TryParseJsonFunctionCallWithResponse(content.Trim());
-        if (resultFromContent != null)
-        {
-            this._logger.LogInformation("Successfully parsed function call from pure JSON content: {FunctionName}", resultFromContent.Value.FunctionCall?.FunctionName);
-            return resultFromContent;
-        }
-
-        // --- Robustness: Try to fix missing closing brace ---
-        var trimmed = content.Trim();
-        if (trimmed.StartsWith("{") && trimmed.Contains("function_call") && !trimmed.EndsWith("}"))
-        {
-            var fixedJson = trimmed + "}";
-            var fixedResult = TryParseJsonFunctionCallWithResponse(fixedJson);
-            if (fixedResult != null)
-            {
-                this._logger.LogInformation("Successfully parsed function call from auto-corrected JSON (added closing brace)");
-                return fixedResult;
-            }
-        }
-        // -----------------------------------------------------
-
-        // Try to extract JSON from the first line and natural language from the rest
-        var lines = content.Split('\n');
-        if (lines.Length >= 2)
-        {
-            var firstLine = lines[0].Trim();
-            var remainingText = string.Join("\n", lines.Skip(1)).Trim();
-
-            // Check if first line is JSON with empty function_call
-            var jsonResult = TryParseJsonFunctionCallWithResponse(firstLine);
-            if (jsonResult != null && jsonResult.Value.FunctionCall == null)
-            {
-                // Empty function_call with natural language response
-                this._logger.LogInformation("Successfully parsed empty function call with natural language response");
-                return (null, remainingText);
-            }
-        }
-
-        // If not pure JSON, try to extract JSON from code blocks (```json ... ```)
-        var jsonContent = ExtractJsonFromCodeBlock(content);
-        if (!string.IsNullOrEmpty(jsonContent))
-        {
-            this._logger.LogInformation("Extracted JSON from code block: {JsonContent}", jsonContent);
-            var result = TryParseJsonFunctionCallWithResponse(jsonContent);
-            if (result != null)
-            {
-                this._logger.LogInformation("Successfully parsed function call from code block: {FunctionName}", result.Value.FunctionCall?.FunctionName);
-                return result;
-            }
-        }
-
-        // Fallback: try to parse without response format
-        var functionCallFromContent = TryParseJsonFunctionCall(content.Trim());
-        if (functionCallFromContent != null)
-        {
-            this._logger.LogInformation("Successfully parsed function call from pure JSON content (no response format): {FunctionName}", functionCallFromContent.FunctionName);
-            return (functionCallFromContent, null);
-        }
-
-        // If JSON parsing fails, try to extract function call using regex
-        var functionCallMatch = Regex.Match(content, @"(?:function_call|call|invoke)\s*:?\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)",
-            RegexOptions.IgnoreCase);
-        if (functionCallMatch.Success)
-        {
-            var functionName = functionCallMatch.Groups[1].Value;
-            var argumentsString = functionCallMatch.Groups[2].Value;
-
-            this._logger.LogInformation("Successfully parsed function call using regex: {FunctionName}", functionName);
-            var functionCall = OnnxFunction.ParseFunctionCall(functionName, argumentsString);
-            return (functionCall, null);
-        }
-
-        this._logger.LogInformation("Failed to parse function call from content");
-        return null;
-    }
-
-    /// <summary>
-    /// Tries to parse a function call from the model's response (legacy method for backward compatibility).
-    /// </summary>
-    private FunctionCallContent? TryParseFunctionCall(string? content)
-    {
-        var result = TryParseFunctionCallWithResponse(content);
-        return result?.FunctionCall;
-    }
-
-    /// <summary>
-    /// Checks if the content contains a function call pattern.
-    /// </summary>
-    private static bool ContainsFunctionCall(string content)
-    {
-        if (string.IsNullOrEmpty(content))
-        {
-            return false;
-        }
-
-        // Check for JSON function call pattern
-        if (content.Contains("function_call") && content.Contains("{") && content.Contains("}"))
-        {
-            return true;
-        }
-
-        // Check for code block with function call
-        if (content.Contains("```") && content.Contains("function_call"))
-        {
-            return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Extracts JSON content from markdown code blocks.
-    /// </summary>
-    private static string? ExtractJsonFromCodeBlock(string content)
-    {
-        // Match ```json ... ``` or ``` ... ``` patterns
-        var codeBlockMatch = Regex.Match(content, @"```(?:json)?\s*\n?(.*?)\n?```", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-        if (codeBlockMatch.Success)
-        {
-            return codeBlockMatch.Groups[1].Value.Trim();
-        }
-
-        // Match `{...}` inline code blocks
-        var inlineCodeMatch = Regex.Match(content, @"`(\{.*?\})`", RegexOptions.Singleline);
-        if (inlineCodeMatch.Success)
-        {
-            return inlineCodeMatch.Groups[1].Value.Trim();
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Tries to parse a function call from JSON content.
-    /// </summary>
-    private static FunctionCallContent? TryParseJsonFunctionCall(string jsonContent)
-    {
-        try
-        {
-            var jsonDocument = JsonDocument.Parse(jsonContent);
-            if (jsonDocument.RootElement.TryGetProperty("function_call", out var functionCallElement))
-            {
-                if (functionCallElement.TryGetProperty("name", out var nameElement))
-                {
-                    var functionName = nameElement.GetString();
-
-                    if (!string.IsNullOrEmpty(functionName))
-                    {
-                        // Try to get arguments, use empty object if not present
-                        var argumentsJson = "{}";
-                        if (functionCallElement.TryGetProperty("arguments", out var argumentsElement))
-                        {
-                            argumentsJson = argumentsElement.GetRawText();
-                        }
-
-                        return OnnxFunction.ParseFunctionCall(functionName, argumentsJson);
-                    }
-                }
-            }
-        }
-        catch (JsonException)
-        {
-            // JSON parsing failed, return null to try other methods
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Tries to parse a function call with response format from JSON content.
-    /// </summary>
-    private static (FunctionCallContent? FunctionCall, string? ResponseFormat)? TryParseJsonFunctionCallWithResponse(string jsonContent)
-    {
-        try
-        {
-            var jsonDocument = JsonDocument.Parse(jsonContent);
-            if (jsonDocument.RootElement.TryGetProperty("function_call", out var functionCallElement))
-            {
-                // Check for response_format first
-                string? responseFormat = null;
-                if (jsonDocument.RootElement.TryGetProperty("response_format", out var responseFormatElement))
-                {
-                    responseFormat = responseFormatElement.GetString();
-                }
-
-                // Check if function_call is a string (direct function name)
-                if (functionCallElement.ValueKind == JsonValueKind.String)
-                {
-                    var functionName = functionCallElement.GetString();
-                    if (!string.IsNullOrEmpty(functionName))
-                    {
-                        var functionCall = OnnxFunction.ParseFunctionCall(functionName, "{}");
-                        return (functionCall, responseFormat);
-                    }
-                }
-
-                // Check if this is a natural language response (empty function_call)
-                if (functionCallElement.ValueKind == JsonValueKind.Object &&
-                    functionCallElement.EnumerateObject().Count() == 0)
-                {
-                    // Empty function_call means natural language response
-                    return (null, responseFormat);
-                }
-
-                // Check if this is an actual function call with name (arguments are optional)
-                if (functionCallElement.TryGetProperty("name", out var nameElement))
-                {
-                    var functionName = nameElement.GetString();
-
-                    if (!string.IsNullOrEmpty(functionName))
-                    {
-                        // Try to get arguments, use empty object if not present
-                        var argumentsJson = "{}";
-                        if (functionCallElement.TryGetProperty("arguments", out var argumentsElement))
-                        {
-                            argumentsJson = argumentsElement.GetRawText();
-                        }
-
-                        var functionCall = OnnxFunction.ParseFunctionCall(functionName, argumentsJson);
-                        return (functionCall, responseFormat);
-                    }
-                }
-            }
-        }
-        catch (JsonException)
-        {
-            // JSON parsing failed, return null to try other methods
-        }
-
-        return null;
+        this._functionInvoker ??= new OnnxFunctionInvoker(this.GetChatCompletionService(), this._logger);
+        return await this._functionInvoker.InvokeFunctionAsync(functionCall, responseFormat, toolCallingConfig, chatHistory, executionSettings, kernel, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -883,52 +452,5 @@ public sealed class OnnxRuntimeGenAIFunctionCallingChatCompletionService : IChat
         }
 
         return toolCallingConfig.Tools.Any(tool => tool.FunctionName == functionCallContent.FunctionName);
-    }
-
-    /// <summary>
-    /// Formats function result for better user experience.
-    /// </summary>
-    private static string FormatFunctionResult(string functionName, string functionResult)
-    {
-        // Handle null/empty results (typically from void functions)
-        if (string.IsNullOrEmpty(functionResult) || functionResult == "<null>")
-        {
-            return "Done.";
-        }
-
-        // Handle boolean results more naturally
-        if (bool.TryParse(functionResult, out bool boolResult))
-        {
-            return boolResult ? "Yes." : "No.";
-        }
-
-        // Return the result as-is for all other cases
-        return functionResult;
-    }
-
-    /// <summary>
-    /// Applies response format to the function result.
-    /// </summary>
-    private static string ApplyResponseFormat(string responseFormat, string functionResult)
-    {
-        try
-        {
-            // Replace {result} with the actual function result
-            var result = responseFormat.Replace("{result}", functionResult);
-
-            // If the response format doesn't contain {result}, it means the model provided a complete sentence
-            // Return it as-is (this is the versatile approach)
-            if (!responseFormat.Contains("{result}"))
-            {
-                return responseFormat;
-            }
-
-            return result;
-        }
-        catch (Exception)
-        {
-            // If any error occurs during formatting, return the original function result
-            return functionResult;
-        }
     }
 }
