@@ -65,7 +65,7 @@ public sealed class OnnxRuntimeGenAIChatCompletionService : IChatCompletionServi
 
     private IChatCompletionService GetChatCompletionService()
     {
-        this._chatClient ??= new OnnxRuntimeGenAIChatClient(this._model, false, new OnnxRuntimeGenAIChatClientOptions
+        this._chatClient ??= new OnnxRuntimeGenAIChatClient(this._model, false, new OnnxRuntimeGenAIChatClientOptions()
         {
             PromptFormatter = (messages, options) =>
             {

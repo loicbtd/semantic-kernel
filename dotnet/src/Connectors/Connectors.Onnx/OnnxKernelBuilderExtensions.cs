@@ -37,12 +37,13 @@ public static class OnnxKernelBuilderExtensions
         ILoggerFactory? loggerFactory = null,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        builder.Services.AddKeyedSingleton<IChatCompletionService>(serviceId, (serviceProvider, _) => new OnnxRuntimeGenAIChatCompletionService(
-            modelId,
-            modelPath: modelPath,
-            providers: providers,
-            loggerFactory: serviceProvider.GetService<ILoggerFactory>(),
-            jsonSerializerOptions));
+        builder.Services.AddKeyedSingleton<IChatCompletionService>(serviceId, (serviceProvider, _) => 
+            new OnnxRuntimeGenAIChatCompletionService(
+                modelId,
+                modelPath: modelPath,
+                providers: providers,
+                loggerFactory: serviceProvider.GetService<ILoggerFactory>(),
+                jsonSerializerOptions));
 
         return builder;
     }
