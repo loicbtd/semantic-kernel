@@ -21,7 +21,7 @@ public class Onnx_ChatCompletionStreaming(ITestOutputHelper output) : BaseTest(o
     /// <item>
     /// <term>ModelId:</term>
     /// <description>phi-3</description>
-    /// </item>
+    /// </item> 
     /// <item>
     /// <term>ModelPath:</term>
     /// <description>D:\huggingface\Phi-3-mini-4k-instruct-onnx\cpu_and_mobile\cpu-int4-rtn-block-32</description>
@@ -92,7 +92,6 @@ public class Onnx_ChatCompletionStreaming(ITestOutputHelper output) : BaseTest(o
 
         var kernel = Kernel.CreateBuilder()
             .AddOnnxRuntimeGenAIChatCompletion(
-                serviceId: "onnx",
                 modelId: TestConfiguration.Onnx.ModelId,
                 modelPath: TestConfiguration.Onnx.ModelPath)
             .Build();
