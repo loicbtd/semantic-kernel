@@ -21,36 +21,28 @@ public static class OnnxKernelBuilderExtensions
     /// Adds OnnxRuntimeGenAI Chat Completion services to the specified <see cref="IKernelBuilder"/>.
     /// </summary>
     /// <param name="builder">The <see cref="IKernelBuilder"/> instance to augment.</param>
+    /// <param name="modelId">Model Id.</param>
     /// <param name="modelPath">The generative AI ONNX model path for the chat completion service.</param>
     /// <param name="serviceId">A local identifier for the given AI service.</param>
-    /// <param name="modelId">Model Id.</param>
+    /// <param name="providers">Providers</param>
     /// <param name="loggerFactory">Logger factory.</param>
     /// <param name="jsonSerializerOptions">The <see cref="JsonSerializerOptions"/> to use for various aspects of serialization, such as function argument deserialization, function result serialization, logging, etc., of the service.</param>
-    /// <param name="providers">Providers</param>
     /// <returns>The same instance as <paramref name="builder"/>.</returns>
     public static IKernelBuilder AddOnnxRuntimeGenAIChatCompletion(
         this IKernelBuilder builder,
+        string modelId,
         string modelPath,
-        string serviceId,
-        string? modelId = null,
+        string? serviceId = null,
+        List<Provider>? providers = null,
         ILoggerFactory? loggerFactory = null,
-        JsonSerializerOptions? jsonSerializerOptions = null,
-        List<Provider>? providers = null
-    )
+        JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        Verify.NotNull(builder);
-        Verify.NotNullOrWhiteSpace(modelPath);
-        Verify.NotNullOrWhiteSpace(serviceId);
-
-        builder.Services.AddKeyedSingleton<IChatCompletionService>(serviceId, (_, _) =>
-            new OnnxRuntimeGenAIChatCompletionService(
-                modelPath: modelPath,
-                modelId: modelId,
-                loggerFactory: loggerFactory,
-                jsonSerializerOptions: jsonSerializerOptions,
-                providers: providers
-            )
-        );
+        builder.Services.AddKeyedSingleton<IChatCompletionService>(serviceId, (serviceProvider, _) => new OnnxRuntimeGenAIChatCompletionService(
+            modelId,
+            modelPath: modelPath,
+            providers: providers,
+            loggerFactory: serviceProvider.GetService<ILoggerFactory>(),
+            jsonSerializerOptions));
 
         return builder;
     }

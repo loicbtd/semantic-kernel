@@ -4,12 +4,13 @@ using System.Collections.Generic;
 
 namespace Microsoft.SemanticKernel.Connectors.Onnx;
 
+/// <summary>ONNX provider</summary>
 public class Provider
 {
     /// <summary>
     /// Id
     /// </summary>
-    public string Id { get; set; }
+    public string Id { get; set; } = "";
 
     /// <summary>
     /// Options

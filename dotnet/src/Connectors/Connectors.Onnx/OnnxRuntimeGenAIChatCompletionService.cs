@@ -30,19 +30,21 @@ public sealed class OnnxRuntimeGenAIChatCompletionService : IChatCompletionServi
     /// <summary>
     /// Initializes a new instance of the OnnxRuntimeGenAIChatCompletionService class.
     /// </summary>
-    /// <param name="modelPath">The generative AI ONNX model path for the chat completion service.</param>
     /// <param name="modelId">The name of the model.</param>
+    /// <param name="modelPath">The generative AI ONNX model path for the chat completion service.</param>
+    /// <param name="providers">The providers to use for the chat completion service.</param>
     /// <param name="loggerFactory">Optional logger factory to be used for logging.</param>
     /// <param name="jsonSerializerOptions">The <see cref="JsonSerializerOptions"/> to use for various aspects of serialization and deserialization required by the service.</param>
-    /// <param name="providers">The providers to use for the chat completion service.</param>
     public OnnxRuntimeGenAIChatCompletionService(
+        string modelId,
         string modelPath,
-        string? modelId = null,
+        List<Provider>? providers = null,
         ILoggerFactory? loggerFactory = null,
-        JsonSerializerOptions? jsonSerializerOptions = null,
-        List<Provider>? providers = null)
+        JsonSerializerOptions? jsonSerializerOptions = null)
     {
+        Verify.NotNullOrWhiteSpace(modelId);
         Verify.NotNullOrWhiteSpace(modelPath);
+
         this._attributesInternal.Add(AIServiceExtensions.ModelIdKey, modelId);
         this._config = new Config(modelPath);
         if (providers != null)
